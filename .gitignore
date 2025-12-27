@@ -1,0 +1,39 @@
+# Dependencies
+**/node_modules/
+ReadFlow Gateway/vendor/
+
+# Build artifacts
+**/build/
+ReadFlow Gateway/readflow-gateway.exe
+ReadFlow Pro/ios/build/
+ReadFlow Pro/web-build/
+.expo/
+**/.expo/
+
+# Databases
+ReadFlow Gateway/data/*.db
+ReadFlow Gateway/data/*.db-journal
+ReadFlow Gateway/data/*.db-shm
+ReadFlow Gateway/data/*.db-wal
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Misc
+ReadFlow Gateway/static/images/

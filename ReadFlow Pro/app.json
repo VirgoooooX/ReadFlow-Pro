@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "ReadFlow",
+    "slug": "ReadFlow",
+    "version": "5.3.2",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "androidStatusBar": {
+      "translucent": true,
+      "backgroundColor": "#00000000"
+    },
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#E6FBFF"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.virgoooooox.ReadFlow",
+      "versionCode": 50302,
+      "splash": {
+        "image": "./assets/transparent.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#E6FBFF"
+      },
+      "navigationBar": {
+        "backgroundColor": "#00000000",
+        "barStyle": "dark-content"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "19329e18-a996-4df1-b5c6-a54963e829ab"
+      }
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-splash-screen"
+    ]
+  }
+}
