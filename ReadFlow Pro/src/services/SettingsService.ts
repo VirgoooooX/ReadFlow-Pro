@@ -207,6 +207,7 @@ export class SettingsService {
           translationProvider: userPreferences.translationProvider,
           maxConcurrentTranslations: userPreferences.maxConcurrentTranslations,
           translationTimeout: userPreferences.translationTimeout,
+          enableImageCompression: userPreferences.enableImageCompression !== undefined ? userPreferences.enableImageCompression : true,
         };
       }
       return this.getDefaultRSSSettings();
@@ -226,6 +227,7 @@ export class SettingsService {
         translationProvider: settings.translationProvider,
         maxConcurrentTranslations: settings.maxConcurrentTranslations,
         translationTimeout: settings.translationTimeout,
+        enableImageCompression: settings.enableImageCompression,
       });
     } catch (error) {
       logger.error('Error saving RSS settings:', error);
@@ -363,6 +365,7 @@ export class SettingsService {
     return {
       enableTitleTranslation: false,
       translationProvider: 'llm',
+      enableImageCompression: true,
     };
   }
 

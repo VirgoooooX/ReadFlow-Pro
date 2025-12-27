@@ -17,17 +17,17 @@ func (db *DB) CreateItem(
 	publishedAt *time.Time,
 	summary string,
 	wordCount, readingTime int,
-	coverImage, author, cleanContent, contentHash string,
+	coverImage, author, cleanContent, content, contentHash string,
 	imageCaption, imageCredit string,
 ) (*Item, error) {
 	result, err := db.Exec(`
 		INSERT INTO items (
 			source_id, guid, title, xml_content, image_paths, published_at,
-			summary, word_count, reading_time, cover_image, author, clean_content, content_hash,
+			summary, word_count, reading_time, cover_image, author, clean_content, content, content_hash,
 			image_caption, image_credit
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, sourceID, guid, title, xmlContent, imagePaths, publishedAt,
-		summary, wordCount, readingTime, coverImage, author, cleanContent, contentHash,
+		summary, wordCount, readingTime, coverImage, author, cleanContent, content, contentHash,
 		imageCaption, imageCredit)
 
 	if err != nil {
@@ -50,14 +50,14 @@ func (db *DB) GetItemByID(id int64) (*Item, error) {
 		       COALESCE(image_paths, ''), published_at, created_at,
 		       COALESCE(summary, ''), COALESCE(word_count, 0), COALESCE(reading_time, 0),
 		       COALESCE(cover_image, ''), COALESCE(author, ''),
-		       COALESCE(clean_content, ''), COALESCE(content_hash, ''),
+		       COALESCE(clean_content, ''), COALESCE(content, ''), COALESCE(content_hash, ''),
 		       COALESCE(image_caption, ''), COALESCE(image_credit, '')
 		FROM items WHERE id = ?
 	`, id).Scan(
 		&item.ID, &item.SourceID, &item.GUID, &item.Title,
 		&item.XMLContent, &item.ImagePaths, &item.PublishedAt, &item.CreatedAt,
 		&item.Summary, &item.WordCount, &item.ReadingTime,
-		&item.CoverImage, &item.Author, &item.CleanContent, &item.ContentHash,
+		&item.CoverImage, &item.Author, &item.CleanContent, &item.Content, &item.ContentHash,
 		&item.ImageCaption, &item.ImageCredit,
 	)
 
@@ -75,14 +75,14 @@ func (db *DB) GetItemByGUID(sourceID int64, guid string) (*Item, error) {
 		       COALESCE(image_paths, ''), published_at, created_at,
 		       COALESCE(summary, ''), COALESCE(word_count, 0), COALESCE(reading_time, 0),
 		       COALESCE(cover_image, ''), COALESCE(author, ''),
-		       COALESCE(clean_content, ''), COALESCE(content_hash, ''),
+		       COALESCE(clean_content, ''), COALESCE(content, ''), COALESCE(content_hash, ''),
 		       COALESCE(image_caption, ''), COALESCE(image_credit, '')
 		FROM items WHERE source_id = ? AND guid = ?
 	`, sourceID, guid).Scan(
 		&item.ID, &item.SourceID, &item.GUID, &item.Title,
 		&item.XMLContent, &item.ImagePaths, &item.PublishedAt, &item.CreatedAt,
 		&item.Summary, &item.WordCount, &item.ReadingTime,
-		&item.CoverImage, &item.Author, &item.CleanContent, &item.ContentHash,
+		&item.CoverImage, &item.Author, &item.CleanContent, &item.Content, &item.ContentHash,
 		&item.ImageCaption, &item.ImageCredit,
 	)
 
@@ -136,9 +136,13 @@ func (db *DB) BatchCreateUserDeliveries(itemID int64, userIDs []int64) error {
 func (db *DB) GetPendingDeliveries(userID int64, limit int) ([]*Item, error) {
 	rows, err := db.Query(`
 		SELECT i.id, i.source_id, i.guid, i.title, i.xml_content, 
-		       COALESCE(i.image_paths, ''), i.published_at, i.created_at 
+		       COALESCE(i.image_paths, ''), i.published_at, i.created_at,
+		       COALESCE(i.clean_content, ''), COALESCE(i.content, ''),
+		       COALESCE(i.cover_image, ''), COALESCE(i.summary, ''),
+		       s.title, s.url
 		FROM user_deliveries ud
 		INNER JOIN items i ON ud.item_id = i.id
+		INNER JOIN sources s ON i.source_id = s.id
 		WHERE ud.user_id = ? AND ud.status = 0
 		ORDER BY i.published_at DESC
 		LIMIT ?
@@ -155,6 +159,9 @@ func (db *DB) GetPendingDeliveries(userID int64, limit int) ([]*Item, error) {
 		err := rows.Scan(
 			&item.ID, &item.SourceID, &item.GUID, &item.Title,
 			&item.XMLContent, &item.ImagePaths, &item.PublishedAt, &item.CreatedAt,
+			&item.CleanContent, &item.Content,
+			&item.CoverImage, &item.Summary,
+			&item.SourceTitle, &item.SourceURL,
 		)
 		if err != nil {
 			return nil, err
@@ -169,7 +176,10 @@ func (db *DB) GetPendingDeliveries(userID int64, limit int) ([]*Item, error) {
 func (db *DB) GetPendingDeliveriesBySourceURL(userID int64, sourceURL string, limit int) ([]*Item, error) {
 	rows, err := db.Query(`
 		SELECT i.id, i.source_id, i.guid, i.title, i.xml_content, 
-		       COALESCE(i.image_paths, ''), i.published_at, i.created_at 
+		       COALESCE(i.image_paths, ''), i.published_at, i.created_at,
+		       COALESCE(i.clean_content, ''), COALESCE(i.content, ''),
+		       COALESCE(i.cover_image, ''), COALESCE(i.summary, ''),
+		       s.title, s.url
 		FROM user_deliveries ud
 		INNER JOIN items i ON ud.item_id = i.id
 		INNER JOIN sources s ON i.source_id = s.id
@@ -189,6 +199,9 @@ func (db *DB) GetPendingDeliveriesBySourceURL(userID int64, sourceURL string, li
 		err := rows.Scan(
 			&item.ID, &item.SourceID, &item.GUID, &item.Title,
 			&item.XMLContent, &item.ImagePaths, &item.PublishedAt, &item.CreatedAt,
+			&item.CleanContent, &item.Content,
+			&item.CoverImage, &item.Summary,
+			&item.SourceTitle, &item.SourceURL,
 		)
 		if err != nil {
 			return nil, err
@@ -264,7 +277,9 @@ func (db *DB) GetUnreadCount(userID, sourceID int64) (int, error) {
 func (db *DB) GetItemsBySource(sourceID int64) ([]*Item, error) {
 	rows, err := db.Query(`
 		SELECT id, source_id, guid, title, xml_content,
-		       COALESCE(image_paths, ''), published_at, created_at
+		       COALESCE(image_paths, ''), published_at, created_at,
+		       COALESCE(clean_content, ''), COALESCE(content, ''),
+		       COALESCE(cover_image, ''), COALESCE(summary, '')
 		FROM items
 		WHERE source_id = ?
 		ORDER BY created_at DESC
@@ -280,6 +295,8 @@ func (db *DB) GetItemsBySource(sourceID int64) ([]*Item, error) {
 		err := rows.Scan(
 			&item.ID, &item.SourceID, &item.GUID, &item.Title,
 			&item.XMLContent, &item.ImagePaths, &item.PublishedAt, &item.CreatedAt,
+			&item.CleanContent, &item.Content,
+			&item.CoverImage, &item.Summary,
 		)
 		if err != nil {
 			return nil, err
@@ -329,7 +346,7 @@ func (db *DB) GetUserArticles(
 		       s.title, s.url, ud.status,
 		       COALESCE(i.summary, ''), COALESCE(i.word_count, 0), COALESCE(i.reading_time, 0),
 		       COALESCE(i.cover_image, ''), COALESCE(i.author, ''),
-		       COALESCE(i.clean_content, ''), COALESCE(i.content_hash, ''),
+		       COALESCE(i.clean_content, ''), COALESCE(i.content, ''), COALESCE(i.content_hash, ''),
 		       COALESCE(i.image_caption, ''), COALESCE(i.image_credit, ''),
 		       COALESCE(ud.is_favorite, 0), COALESCE(ud.read_progress, 0),
 		       ud.read_at, COALESCE(ud.updated_at, ud.delivered_at)
@@ -394,7 +411,7 @@ func (db *DB) GetUserArticles(
 			&ua.XMLContent, &ua.ImagePaths, &ua.PublishedAt, &ua.CreatedAt,
 			&ua.SourceTitle, &ua.SourceURL, &ua.Status,
 			&ua.Summary, &ua.WordCount, &ua.ReadingTime,
-			&ua.CoverImage, &ua.Author, &ua.CleanContent, &ua.ContentHash,
+			&ua.CoverImage, &ua.Author, &ua.CleanContent, &ua.Content, &ua.ContentHash,
 			&ua.ImageCaption, &ua.ImageCredit,
 			&ua.IsFavorite, &ua.ReadProgress, &ua.ReadAt, &ua.UpdatedAt,
 		); err != nil {

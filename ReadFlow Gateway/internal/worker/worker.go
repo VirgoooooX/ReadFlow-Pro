@@ -338,25 +338,32 @@ func (w *Worker) processItem(sourceID int64, feedItem *gofeed.Item, userIDs []in
 
 	// 【新增】使用智能图片提取器
 	log.Printf("[Worker] Extracting best image for item: %s", feedItem.Title)
-	coverImageURL := w.imageExtractor.ExtractBestImage(feedItem, content)
-	if coverImageURL == "" {
+	var finalCoverImageURL string
+	var imageCaption string
+	var imageCredit string
+
+	imageCandidate := w.imageExtractor.ExtractBestImage(feedItem, content)
+	if imageCandidate != nil {
+		finalCoverImageURL = imageCandidate.URL
+		imageCaption = imageCandidate.Alt
+		imageCredit = imageCandidate.Credit
+	} else {
 		// Fallback到原有逻辑
-		coverImageURL = w.extractBestImageURL(feedItem)
+		finalCoverImageURL = w.extractBestImageURL(feedItem)
 	}
 
 	// 处理内容中的图片（下载+压缩+替换）
-	// 注意：跳过图片处理器以避免vips API问题
 	processedContent := content
 	var imagePaths string
-	// TODO: 修复vips API后启用
-	// if content != "" {
-	// 	var err error
-	// 	processedContent, imagePaths, err = w.imageProcessor.ProcessContent(sourceID, content)
-	// 	if err != nil {
-	// 		log.Printf("[Worker] Failed to process images for item %s: %v", guid, err)
-	// 		processedContent = content
-	// 	}
-	// }
+
+	if content != "" {
+		var err error
+		processedContent, imagePaths, err = w.imageProcessor.ProcessContent(sourceID, content)
+		if err != nil {
+			log.Printf("[Worker] Failed to process images for item %s: %v", guid, err)
+			processedContent = content
+		}
+	}
 
 	// 【新增】文本处理
 	textProcessor := utils.NewTextProcessor()
@@ -416,9 +423,10 @@ func (w *Worker) processItem(sourceID int64, feedItem *gofeed.Item, userIDs []in
 		summary,
 		wordCount,
 		readingTime,
-		coverImageURL,
+		finalCoverImageURL,
 		getAuthor(feedItem),
 		processedContent,
+		content, // Original content
 		contentHash,
 		imageCaption,
 		imageCredit,

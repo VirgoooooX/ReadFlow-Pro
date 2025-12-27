@@ -1,8 +1,8 @@
-version: '3.8'
-
 services:
   readflow-gateway:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     container_name: readflow-gateway
     restart: unless-stopped
     ports:
@@ -21,9 +21,16 @@ services:
       - SERVER_PASSWORD=change_me_in_production
       - JWT_SECRET=your_jwt_secret_key_change_in_production
       - LOG_LEVEL=info
+      - GIN_MODE=release
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 10s
+    # 限制日志大小，防止日志文件过大
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

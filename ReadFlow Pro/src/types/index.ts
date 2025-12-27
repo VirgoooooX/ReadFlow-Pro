@@ -213,6 +213,7 @@ export interface UserPreferences {
   translationTimeout: number;
   defaultCategory: string;
   enableNotifications: boolean;
+  enableImageCompression: boolean; // 新增：是否开启图片压缩
 }
 
 // 刷新配置

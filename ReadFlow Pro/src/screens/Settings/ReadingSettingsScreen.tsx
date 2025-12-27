@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useThemeContext } from '../../theme';
 import { getAvailableFonts } from '../../theme/typography';
 import { useReadingSettings } from '../../contexts/ReadingSettingsContext';
+import { SettingsService } from '../../services/SettingsService';
 import { 
   SettingItem, 
   SettingSliderItem, 
@@ -35,6 +36,7 @@ const ReadingSettingsScreen: React.FC = () => {
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(10);
   const [autoMarkReadOnScroll, setAutoMarkReadOnScroll] = useState(false);
   const [showFontDropdown, setShowFontDropdown] = useState(false);
+  const [enableImageCompression, setEnableImageCompression] = useState(true);
 
   // 从设置中初始化本地状态（仅在首次加载时）
   const [initialized, setInitialized] = useState(false);
@@ -49,6 +51,19 @@ const ReadingSettingsScreen: React.FC = () => {
       setInitialized(true);
     }
   }, [settings, initialized]);
+
+  // 加载 RSS 设置中的图片压缩选项
+  useEffect(() => {
+    const loadRSSSettings = async () => {
+      try {
+        const rssSettings = await SettingsService.getInstance().getRSSSettings();
+        setEnableImageCompression(rssSettings.enableImageCompression ?? true);
+      } catch (error) {
+        console.error('Failed to load RSS settings:', error);
+      }
+    };
+    loadRSSSettings();
+  }, []);
 
   // 清理定时器
   useEffect(() => {
@@ -158,6 +173,21 @@ const ReadingSettingsScreen: React.FC = () => {
     } catch (error) {
       console.error('Failed to update autoMarkReadOnScroll:', error);
       setAutoMarkReadOnScroll(!value);
+    }
+  };
+
+  // 处理图片压缩开关
+  const handleImageCompressionChange = async (value: boolean) => {
+    setEnableImageCompression(value);
+    try {
+      const rssSettings = await SettingsService.getInstance().getRSSSettings();
+      await SettingsService.getInstance().saveRSSSettings({
+        ...rssSettings,
+        enableImageCompression: value
+      });
+    } catch (error) {
+      console.error('Failed to update image compression:', error);
+      setEnableImageCompression(!value);
     }
   };
 
@@ -323,6 +353,27 @@ const ReadingSettingsScreen: React.FC = () => {
             : `ℹ️ 后台将每 ${autoRefreshInterval} 分钟自动静默刷新RSS源`}
         </Text>
       </View>
+
+      {/* Group 4: 网络设置 */}
+      <SettingSection title="网络设置">
+        <SettingItem
+          icon="image"
+          label="开启图片压缩"
+          color={theme?.colors?.secondary || '#6200EE'}
+          rightElement={
+            <View style={{ height: 32, justifyContent: 'center' }}>
+              <Switch
+                value={enableImageCompression}
+                onValueChange={handleImageCompressionChange}
+                trackColor={{ false: theme?.colors?.surfaceVariant, true: theme?.colors?.primary }}
+                thumbColor={enableImageCompression ? theme?.colors?.onPrimary : theme?.colors?.outline}
+                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+              />
+            </View>
+          }
+          isLast
+        />
+      </SettingSection>
 
       {/* 底部留白 */}
       <View style={{ height: 20 }} />

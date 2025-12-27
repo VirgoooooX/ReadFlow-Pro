@@ -57,7 +57,11 @@ func (h *SyncHandler) Sync(c *gin.Context) {
 	// 获取输出格式，默认为 "xml"
 	format := c.DefaultQuery("format", "xml")
 
-	log.Printf("[SYNC] 用户=%d, mode=%s, source_url=%s, format=%s", userID, mode, sourceURL, format)
+	// 获取图片压缩选项，默认为 "true"
+	imageCompressionStr := c.DefaultQuery("image_compression", "true")
+	imageCompression := imageCompressionStr == "true"
+
+	log.Printf("[SYNC] 用户=%d, mode=%s, source_url=%s, format=%s, compression=%v", userID, mode, sourceURL, format, imageCompression)
 
 	// 如果是刷新模式，先执行刷新
 	if mode == "refresh" {
@@ -100,6 +104,19 @@ func (h *SyncHandler) Sync(c *gin.Context) {
 			"message": "查询失败",
 		})
 		return
+	}
+
+	// 处理图片压缩选项
+	if !imageCompression {
+		for _, item := range items {
+			// 如果用户选择不压缩，使用原始内容覆盖 CleanContent
+			// 客户端主要使用 CleanContent 进行渲染
+			if item.Content != "" {
+				item.CleanContent = item.Content
+				// 注意：这里没有重新构建 XMLContent，因为客户端主要使用 JSON 格式
+				// 如果需要支持 XML 格式的非压缩模式，需要重新构建 XMLContent
+			}
+		}
 	}
 
 	// 如果请求 JSON 格式

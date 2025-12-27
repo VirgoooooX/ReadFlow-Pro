@@ -104,9 +104,12 @@ type Item struct {
 	CoverImage   string
 	Author       string
 	CleanContent string
+	Content      string // Original content
 	ContentHash  string
 	ImageCaption string // Added
 	ImageCredit  string // Added
+	SourceTitle  string // Added for sync
+	SourceURL    string // Added for sync
 }
 
 // UserArticle 用户视角的文章（包含源信息与投递状态）
@@ -129,6 +132,7 @@ type UserArticle struct {
 	CoverImage   string
 	Author       string
 	CleanContent string
+	Content      string // Original content
 	ContentHash  string
 	ImageCaption string // Added
 	ImageCredit  string // Added

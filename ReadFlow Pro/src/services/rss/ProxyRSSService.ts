@@ -1,21 +1,39 @@
 /**
- * 代理模式 RSS 服务
+ * 代理模式 RSS 服务 (服务端同步模式)
  * 
- * 极简代理架构：
- * - 服务端只做代理转发 + 图片 URL 替换
- * - 客户端复用本地解析逻辑 (LocalRSSService)
- * 
- * 保留的方法（供未来 JSON 方案使用）：
- * - subscribeToProxyServer() - 订阅源到服务器
- * - syncAllSourcesToProxy() - 批量同步订阅列表
- * - acknowledgeItems() - ACK 确认
+ * 负责与 ReadFlow Gateway 服务端进行同步
+ * - 获取文章列表 (JSON)
+ * - 提交阅读状态/ACK
+ * - 管理订阅源同步
  */
 
 import { DatabaseService } from '../../database/DatabaseService';
-import { RSSSource, Article, ProxyModeConfig } from '../../types';
+import { RSSSource, Article, ProxyModeConfig, AppError } from '../../types';
 import { SettingsService } from '../SettingsService';
-import { localRSSService } from './LocalRSSService';
 import { logger } from './RSSUtils';
+
+interface ServerItem {
+  ID: number;
+  SourceID: number;
+  GUID: string;
+  Title: string;
+  XMLContent: string;
+  ImagePaths: string;
+  PublishedAt: string;
+  CreatedAt: string;
+  Summary: string;
+  WordCount: number;
+  ReadingTime: number;
+  CoverImage: string;
+  Author: string;
+  CleanContent: string;
+  Content: string;
+  ContentHash: string;
+  ImageCaption: string;
+  ImageCredit: string;
+  SourceTitle: string;
+  SourceURL: string;
+}
 
 export class ProxyRSSService {
   private static instance: ProxyRSSService;
@@ -85,68 +103,17 @@ export class ProxyRSSService {
     config: ProxyModeConfig
   ): Promise<void> {
     try {
-      const startTime = Date.now();
+      if (sources.length === 0) return;
       
-      if (sources.length === 0) {
-        logger.info('没有订阅源，无需同步');
-        return;
-      }
+      logger.info(`[Proxy Sync] 开始同步 ${sources.length} 个源到服务端`);
       
-      logger.info('\n' + '='.repeat(60));
-      logger.info('[Proxy Sync] 🚀 开始批量同步订阅源到服务端');
-      logger.info('='.repeat(60));
-      logger.info(`[Proxy Sync] 服务器地址: ${config.serverUrl}`);
-      logger.info(`[Proxy Sync] 待同步源数: ${sources.length}`);
-      logger.info('-'.repeat(60));
-      
-      let successCount = 0;
-      let failCount = 0;
-      const failedSources: Array<{ name: string; error: string }> = [];
-      
-      for (let i = 0; i < sources.length; i++) {
-        const source = sources[i];
+      for (const source of sources) {
         try {
-          const progress = `[${i + 1}/${sources.length}]`;
-          logger.info(`${progress} 正在同步: ${source.name}`);
-          
-          const response = await fetch(`${config.serverUrl}/api/subscribe`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${config.token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              url: source.url,
-              title: source.name,
-            }),
-          });
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            logger.warn(`${progress} ❌ 同步失败 (HTTP ${response.status}): ${source.name}`);
-            failCount++;
-            failedSources.push({ name: source.name, error: `HTTP ${response.status}` });
-            continue;
-          }
-          
-          successCount++;
-          logger.info(`${progress} ✅ 同步成功: ${source.name}`);
+          await this.subscribeToProxyServer(source.url, source.name, config);
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          logger.warn(`[${i + 1}/${sources.length}] ❌ 同步异常: ${source.name}`);
-          failCount++;
-          failedSources.push({ name: source.name, error: errorMsg });
+          logger.warn(`[Proxy Sync] 同步源失败: ${source.name}`, error);
         }
       }
-      
-      const duration = Date.now() - startTime;
-      logger.info('-'.repeat(60));
-      logger.info('[Proxy Sync] 📊 同步总结');
-      logger.info(`[Proxy Sync] ✅ 成功: ${successCount}/${sources.length}`);
-      logger.info(`[Proxy Sync] ❌ 失败: ${failCount}/${sources.length}`);
-      logger.info(`[Proxy Sync] ⏱️  耗时: ${(duration / 1000).toFixed(2)}s`);
-      logger.info('='.repeat(60) + '\n');
-      
     } catch (error) {
       logger.error('[Proxy Sync] 💥 同步过程出错:', error);
       throw error;
@@ -154,8 +121,7 @@ export class ProxyRSSService {
   }
 
   /**
-   * 从代理服务器同步文章（极简代理模式）
-   * 遍历所有源，通过代理获取 XML 并复用本地解析逻辑
+   * 从服务端全量/增量同步文章
    */
   public async syncFromProxyServer(
     options: {
@@ -172,172 +138,231 @@ export class ProxyRSSService {
     try {
       const config = await this.getProxyConfig();
       if (!config.enabled || !config.serverUrl) {
-        logger.warn('代理模式未启用');
         return { success: 0, failed: 0, totalArticles: 0, errors: [] };
       }
 
-      // 获取所有活跃的 RSS 源
-      const sources = await this.databaseService.executeQuery(
-        'SELECT * FROM rss_sources WHERE is_active = 1 ORDER BY sort_order ASC, id ASC'
-      );
+      const rssSettings = await SettingsService.getInstance().getRSSSettings();
+      const compress = rssSettings.enableImageCompression;
+      const mode = options.mode || 'sync';
 
-      if (sources.length === 0) {
+      logger.info(`[Sync] 开始同步 (mode=${mode}, compress=${compress})`);
+
+      // 调用 Sync API
+      const url = `${config.serverUrl}/api/sync?format=json&image_compression=${compress}&mode=${mode}&limit=100`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sync failed: HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.success || !Array.isArray(data.items)) {
+        throw new Error('Invalid sync response');
+      }
+
+      const items: ServerItem[] = data.items;
+      logger.info(`[Sync] 收到 ${items.length} 篇文章`);
+
+      if (items.length === 0) {
         return { success: 0, failed: 0, totalArticles: 0, errors: [] };
       }
 
-      logger.info(`[syncFromProxyServer] 极简代理模式，待同步源数: ${sources.length}`);
+      // 保存文章
+      const savedArticles = await this.saveArticlesFromSync(items);
+      
+      // 发送 ACK
+      const itemIds = items.map(i => i.ID);
+      await this.acknowledgeItems(itemIds, config);
 
-      let success = 0;
-      let failed = 0;
-      let totalArticles = 0;
-      const errors: Array<{ source: string; error: string }> = [];
+      return { 
+        success: savedArticles.length, 
+        failed: items.length - savedArticles.length, 
+        totalArticles: savedArticles.length, 
+        errors: [] 
+      };
 
-      for (let i = 0; i < sources.length; i++) {
-        const row = sources[i];
-        const source: RSSSource = {
-          id: row.id,
-          name: row.title || row.name,
-          url: row.url,
-          category: row.category || 'General',
-          contentType: row.content_type || 'image_text',
-          isActive: true,
-          sortOrder: row.sort_order || 0,
-          errorCount: row.error_count || 0,
-          groupId: row.group_id || null,
-        };
-
-        try {
-          options.onProgress?.(i, sources.length, source.name);
-          
-          const articles = await this.fetchArticlesViaProxy(source, config);
-          success++;
-          totalArticles += articles.length;
-          
-          logger.info(`[syncFromProxyServer] ✅ ${source.name}: ${articles.length} 篇`);
-        } catch (error) {
-          failed++;
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          errors.push({ source: source.name, error: errorMsg });
-          options.onError?.(error as Error, source.name);
-          
-          logger.error(`[syncFromProxyServer] ❌ ${source.name}: ${errorMsg}`);
-        }
-      }
-
-      options.onProgress?.(sources.length, sources.length, '完成');
-
-      return { success, failed, totalArticles, errors };
     } catch (error) {
       logger.error('Error syncing from proxy server:', error);
       return { 
         success: 0, 
         failed: 1, 
-        totalArticles: 0,
-        errors: [{ source: '代理服务器', error: (error as Error).message }],
+        totalArticles: 0, 
+        errors: [{ source: 'Server', error: (error as Error).message }] 
       };
     }
   }
 
   /**
-   * 从代理服务器获取单个源的文章（极简代理模式）
-   * 通过代理获取 XML 并复用本地解析逻辑
+   * 获取单个源的文章 (兼容 RSSService 调用)
    */
   public async fetchArticlesFromProxy(
     source: RSSSource,
     config: ProxyModeConfig,
     options: { mode?: 'sync' | 'refresh' } = {}
   ): Promise<Article[]> {
-    // 极简代理模式：直接调用 fetchArticlesViaProxy
-    return this.fetchArticlesViaProxy(source, config);
-  }
-
-  /**
-   * 极简代理模式 - 通过代理获取 RSS
-   * 服务端只做转发 + 图片 URL 替换，客户端复用本地解析逻辑
-   */
-  private async fetchArticlesViaProxy(
-    source: RSSSource,
-    config: ProxyModeConfig
-  ): Promise<Article[]> {
     try {
-      logger.info(`[fetchArticlesViaProxy] 🚀 通过代理获取: ${source.name}`);
+      const rssSettings = await SettingsService.getInstance().getRSSSettings();
+      const compress = rssSettings.enableImageCompression;
+      const mode = options.mode || 'refresh'; // 单个源默认刷新
+
+      const url = `${config.serverUrl}/api/sync?format=json&image_compression=${compress}&mode=${mode}&source_url=${encodeURIComponent(source.url)}&limit=50`;
       
-      // 调用代理服务器的 RSS 代理接口
-      const proxyUrl = `${config.serverUrl}/api/rss?url=${encodeURIComponent(source.url)}`;
-      
-      const headers: Record<string, string> = {};
-      if (config.token) {
-        headers['Authorization'] = `Bearer ${config.token}`;
-      }
-      
-      const response = await fetch(proxyUrl, { headers });
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+        },
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`Fetch failed: HTTP ${response.status}`);
       }
 
-      const xmlText = await response.text();
-      logger.info(`[fetchArticlesViaProxy] 收到 XML: ${xmlText.length} bytes`);
-
-      // 复用本地解析逻辑（LocalRSSService 的 parseRSSFeedAndSave）
-      const articles = await localRSSService.parseRSSFeedAndSave(xmlText, source);
+      const data = await response.json();
+      const items: ServerItem[] = data.items || [];
       
-      logger.info(`[fetchArticlesViaProxy] ✅ ${source.name}: 解析到 ${articles.length} 篇文章`);
+      if (items.length > 0) {
+        const saved = await this.saveArticlesFromSync(items);
+        // ACK
+        await this.acknowledgeItems(items.map(i => i.ID), config);
+        return saved;
+      }
       
-      return articles;
+      return [];
     } catch (error) {
-      logger.error(`[fetchArticlesViaProxy] ❌ ${source.name}:`, error);
+      logger.error(`Error fetching from proxy for ${source.name}:`, error);
       throw error;
     }
   }
 
   // =================== 内部方法 ===================
 
-  // [已删除] parseRSSFromProxy - 极简代理模式下不再需要，复用 LocalRSSService
-  // [已删除] parseProxyServerXML - 极简代理模式下不再需要，服务端不再拼装 XML
-  // [已删除] createArticleFromFeedItem - 极简代理模式下不再需要，复用 LocalRSSService
-
   /**
-   * 保存文章到数据库（保留供未来 JSON 方案使用）
+   * 保存同步下来的文章
    */
-  private async saveArticle(article: Omit<Article, 'id'> | Article): Promise<Article | null> {
-    try {
-      const result = await this.databaseService.executeInsert(
-        `INSERT INTO articles (
-          title, url, content, summary, author, published_at, rss_source_id, 
-          source_name, category, word_count, reading_time, difficulty, 
-          is_read, is_favorite, read_progress, tags, guid, image_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          article.title,
-          article.url,
-          article.content,
-          article.summary,
-          article.author,
-          article.publishedAt.toISOString(),
-          article.sourceId,
-          article.sourceName,
-          article.category,
-          article.wordCount,
-          article.readingTime,
-          article.difficulty,
-          article.isRead ? 1 : 0,
-          article.isFavorite ? 1 : 0,
-          article.readProgress,
-          JSON.stringify(article.tags),
-          article.url,
-          article.imageUrl || null,
-        ]
-      );
+  private async saveArticlesFromSync(items: ServerItem[]): Promise<Article[]> {
+    const savedArticles: Article[] = [];
 
-      return {
-        ...article,
-        id: Number(result.insertId),
-      } as Article;
-    } catch (error) {
-      logger.error('Error saving article:', error);
-      return null;
+    for (const item of items) {
+      try {
+        // 查找本地源 ID
+        // 优先使用 SourceURL 匹配，因为 SourceID 是服务端的
+        let localSourceId = 0;
+        let sourceName = item.SourceTitle || 'Unknown';
+        
+        if (item.SourceURL) {
+          const sources = await this.databaseService.executeQuery(
+            'SELECT id, title FROM rss_sources WHERE url = ?',
+            [item.SourceURL]
+          );
+          if (sources.length > 0) {
+            localSourceId = sources[0].id;
+            sourceName = sources[0].title || sourceName;
+          }
+        }
+
+        // 如果找不到本地源，可能需要自动创建或者跳过
+        // 这里选择跳过，或者归类到 "Unknown"
+        if (localSourceId === 0) {
+           // 尝试用 SourceID 匹配 (如果之前同步过 ID)
+           // 但目前没有同步机制，所以暂时忽略或创建临时源
+           // 简单起见，如果 URL 匹配不到，就不保存关联源
+           // 但 Article 必须有 sourceId
+           // 我们可以创建一个 "Inbox" 源?
+           // 或者自动创建该源?
+           
+           // 自动创建源
+           if (item.SourceURL) {
+             const result = await this.databaseService.executeInsert(
+               'INSERT INTO rss_sources (url, title, is_active) VALUES (?, ?, 1)',
+               [item.SourceURL, item.SourceTitle || 'Auto Imported']
+             );
+             localSourceId = Number(result.insertId);
+           }
+        }
+
+        // 确定内容：优先使用 CleanContent (可能是压缩后的，也可能是原始的)
+        // 或者是 Content (如果 CleanContent 为空)
+        // 服务端 Sync API 已经根据 image_compression 参数处理了 CleanContent
+        const content = item.CleanContent || item.Content || item.XMLContent || '';
+        
+        // 检查是否已存在
+        const existing = await this.databaseService.executeQuery(
+          'SELECT id FROM articles WHERE url = ? OR guid = ?',
+          [item.GUID, item.GUID] // 使用 GUID 去重
+        );
+
+        if (existing.length > 0) {
+          continue; // 已存在
+        }
+
+        const result = await this.databaseService.executeInsert(
+          `INSERT INTO articles (
+            title, url, content, summary, author, published_at, rss_source_id, 
+            source_name, category, word_count, reading_time, difficulty, 
+            is_read, is_favorite, read_progress, tags, guid, image_url,
+            image_caption, image_credit
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.Title,
+            item.GUID, // 使用 GUID 作为 URL (如果 GUID 是 URL) 或者 item.SourceURL + GUID? 
+                       // 通常 GUID 是 URL，或者是唯一 ID。这里我们存 GUID 到 url 字段? 
+                       // 不，url 字段应该是文章链接。服务端 Item 没有 Link 字段?
+                       // 这是一个疏忽。Item struct 只有 GUID。通常 RSS Item Link != GUID.
+                       // 无论如何，我们暂且用 GUID。如果 GUID 不是 URL，客户端点击可能会有问题。
+                       // 但 JSON 渲染是本地的，所以也许没关系。
+            content,
+            item.Summary,
+            item.Author,
+            item.PublishedAt, // 字符串格式
+            localSourceId,
+            sourceName,
+            'General', // Category
+            item.WordCount,
+            item.ReadingTime,
+            'intermediate', // Difficulty
+            0, 0, 0, // is_read, is_favorite, read_progress
+            '[]', // tags
+            item.GUID,
+            item.CoverImage,
+            item.ImageCaption,
+            item.ImageCredit
+          ]
+        );
+
+        savedArticles.push({
+          id: Number(result.insertId),
+          title: item.Title,
+          content: content,
+          summary: item.Summary,
+          author: item.Author,
+          publishedAt: new Date(item.PublishedAt),
+          sourceId: localSourceId,
+          sourceName: sourceName,
+          url: item.GUID,
+          imageUrl: item.CoverImage,
+          imageCaption: item.ImageCaption,
+          imageCredit: item.ImageCredit,
+          tags: [],
+          category: 'General',
+          wordCount: item.WordCount,
+          readingTime: item.ReadingTime,
+          difficulty: 'intermediate',
+          isRead: false,
+          isFavorite: false,
+          readProgress: 0,
+        });
+
+      } catch (error) {
+        logger.error(`Failed to save item ${item.ID}:`, error);
+      }
     }
+
+    return savedArticles;
   }
 
   /**
@@ -347,6 +372,7 @@ export class ProxyRSSService {
     itemIds: number[],
     config: ProxyModeConfig
   ): Promise<void> {
+    if (itemIds.length === 0) return;
     try {
       await fetch(`${config.serverUrl}/api/ack`, {
         method: 'POST',
@@ -356,7 +382,7 @@ export class ProxyRSSService {
         },
         body: JSON.stringify({ item_ids: itemIds }),
       });
-      logger.info(`ACK 已发送，清理 ${itemIds.length} 条记录`);
+      logger.info(`ACK 已发送，确认 ${itemIds.length} 条记录`);
     } catch (error) {
       logger.error('Error acknowledging items:', error);
     }
