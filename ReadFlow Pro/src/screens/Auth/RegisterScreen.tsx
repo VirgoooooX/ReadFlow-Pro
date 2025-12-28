@@ -138,7 +138,7 @@ const RegisterScreen: React.FC<Props> = ({ navigation }) => {
             />
           </View>
           <Text style={styles.title}>创建账户</Text>
-          <Text style={styles.subtitle}>加入ReadFlow社区</Text>
+          <Text style={styles.subtitle}>加入ReadFlow Pro社区</Text>
         </View>
 
         {/* 注册表单 */}

@@ -8,7 +8,7 @@ import (
 // GetAllUsers 获取所有用户
 func (db *DB) GetAllUsers() ([]*User, error) {
 	rows, err := db.Query(`
-		SELECT id, username, token, created_at, last_login_at
+		SELECT id, username, COALESCE(token, ''), created_at, COALESCE(last_login_at, '')
 		FROM users
 		ORDER BY created_at DESC
 	`)

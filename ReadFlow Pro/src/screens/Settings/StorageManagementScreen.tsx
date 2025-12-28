@@ -11,12 +11,15 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useThemeContext } from '../../theme';
 import { useNavigation } from '@react-navigation/native';
-import { imageCacheService, DatabaseService } from '../../services';
+import { imageCacheService, DatabaseService, SettingsService } from '../../services';
 import cacheEventEmitter from '../../services/CacheEventEmitter';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUser } from '../../contexts/UserContext';
 
 const StorageManagementScreen: React.FC = () => {
   const { theme, isDark } = useThemeContext();
   const navigation = useNavigation();
+  const { logout } = useUser();
   const styles = createStyles(isDark, theme);
 
   const [imageCacheSize, setImageCacheSize] = useState<string>('计算中...');
@@ -103,7 +106,7 @@ const StorageManagementScreen: React.FC = () => {
       cacheEventEmitter.clearAll();
       console.log('✅ 缓存清除事件已触发');
 
-      // 5. 【修复】触发 RSS 统计更新事件，通知订阅源页面刷新
+      // 5. 【修复】触发 RSS 统计更新事件，通知 订阅源页面刷新
       cacheEventEmitter.updateRSSStats();
       console.log('✅ RSS统计更新事件已触发');
 
@@ -111,13 +114,7 @@ const StorageManagementScreen: React.FC = () => {
 
       Alert.alert(
         '清除成功',
-        `已成功清除：
-
-• 文章数据
-• 图片缓存
-• RSS源计数
-
-请到首页下拉刷新RSS源来获取文章。`,
+        `已成功清除：\n\n• 文章数据\n• 图片缓存\n• RSS源计数\n\n请到首页下拉刷新RSS源来获取文章。`,
         [
           {
             text: '好的',
@@ -134,6 +131,49 @@ const StorageManagementScreen: React.FC = () => {
     } finally {
       setIsClearing(false);
     }
+  };
+
+  const handleResetApp = () => {
+    Alert.alert(
+      '重置应用 (危险)',
+      '此操作将删除所有本地数据，包括：\n\n• 所有已保存的RSS源\n• 所有文章和图片缓存\n• 所有应用设置和偏好\n• 登录状态\n\n操作不可撤销，应用将重置为初始安装状态并退出登录。',
+      [
+        { text: '取消', style: 'cancel' },
+        { 
+          text: '确认重置', 
+          style: 'destructive', 
+          onPress: async () => {
+            setIsClearing(true);
+            try {
+              // 1. 清除图片缓存
+              await imageCacheService.cleanCache(0);
+              
+              // 2. 清除所有 AsyncStorage 设置
+              await SettingsService.getInstance().clearAllSettings();
+              
+              // 3. 重置并物理删除数据库文件
+              await DatabaseService.getInstance().resetDatabase();
+              
+              // 4. 退出登录
+              await logout();
+              
+              Alert.alert('重置成功', '应用数据已完全清除，请重新启动应用。', [
+                { text: '确定', onPress: () => {
+                  // 重置应用后，由于 logout 会改变 state.isAuthenticated，
+                  // RootNavigator 会自动切换到 Auth 栈，不需要手动跳转。
+                  // 如果非要跳转，也应该跳转到有效的屏幕或让它自动重载。
+                }}
+              ]);
+            } catch (error) {
+              console.error('重置应用失败:', error);
+              Alert.alert('失败', '重置应用时出错：' + (error as any).message);
+            } finally {
+              setIsClearing(false);
+            }
+          }
+        },
+      ]
+    );
   };
 
   const StorageItem = ({ icon, label, size, onPress }: any) => (
@@ -211,13 +251,22 @@ const StorageManagementScreen: React.FC = () => {
             ) : (
               <>
                 <MaterialIcons name="delete-sweep" size={20} color="#fff" />
-                <Text style={styles.clearButtonText}>清除所有数据</Text>
+                <Text style={styles.clearButtonText}>清除文章缓存</Text>
               </>
             )}
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[styles.resetButton, isClearing && styles.clearButtonDisabled]}
+            onPress={handleResetApp}
+            disabled={isClearing}
+          >
+            <MaterialIcons name="refresh" size={20} color="#FF4D4F" />
+            <Text style={styles.resetButtonText}>重置应用全部数据</Text>
+          </TouchableOpacity>
+
           <Text style={styles.warningText}>
-            ⚠️ 清除后无法恢复，请谨慎操作
+            ⚠️ 重置操作将删除所有订阅、设置和登录信息
           </Text>
         </View>
       </View>
@@ -383,6 +432,23 @@ const createStyles = (isDark: boolean, theme: any) =>
       color: '#fff',
       fontSize: 15,
       fontWeight: '600',
+    },
+    resetButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: '#FF4D4F',
+      padding: 14,
+      borderRadius: 12,
+      marginTop: 12,
+    },
+    resetButtonText: {
+      color: '#FF4D4F',
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
     },
     warningText: {
       fontSize: 12,

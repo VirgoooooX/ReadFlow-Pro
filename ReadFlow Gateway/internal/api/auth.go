@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/readflow/gateway/internal/config"
 	"github.com/readflow/gateway/internal/db"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthService 认证服务
@@ -31,6 +33,13 @@ type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 }
 
+// RegisterRequest 注册请求
+type RegisterRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	Email    string `json:"email"` // 可选
+}
+
 // LoginResponse 登录响应
 type LoginResponse struct {
 	Success bool   `json:"success"`
@@ -46,10 +55,11 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// Login 用户登录
-func (a *AuthService) Login(c *gin.Context) {
-	var req LoginRequest
+// Register 用户注册
+func (a *AuthService) Register(c *gin.Context) {
+	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[AUTH] Invalid register request: %v", err)
 		c.JSON(http.StatusBadRequest, LoginResponse{
 			Success: false,
 			Message: "无效的请求参数",
@@ -57,28 +67,88 @@ func (a *AuthService) Login(c *gin.Context) {
 		return
 	}
 
-	// 验证全局密码
-	if req.Password != a.config.ServerPassword {
-		c.JSON(http.StatusUnauthorized, LoginResponse{
+	log.Printf("[AUTH] Registering user: username=%s, email=%s", req.Username, req.Email)
+
+	// 哈希密码
+	hashedPassword, err := a.HashPassword(req.Password)
+	if err != nil {
+		log.Printf("[AUTH] Password hashing failed: %v", err)
+		c.JSON(http.StatusInternalServerError, LoginResponse{
 			Success: false,
-			Message: "密码错误",
+			Message: "密码处理失败",
 		})
 		return
 	}
 
-	// 创建或获取用户
-	user, err := a.db.CreateOrGetUser(req.Username)
+	// 创建用户
+	user, err := a.db.CreateUser(req.Username, req.Email, hashedPassword)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, LoginResponse{
+		log.Printf("[AUTH] Create user failed: %v", err)
+		c.JSON(http.StatusBadRequest, LoginResponse{
 			Success: false,
-			Message: "服务器错误",
+			Message: "用户名或邮箱已存在",
 		})
 		return
+	}
+
+	log.Printf("[AUTH] User registered successfully: id=%d", user.ID)
+
+	c.JSON(http.StatusOK, LoginResponse{
+		Success: true,
+		UserID:  user.ID,
+		Message: "注册成功",
+	})
+}
+
+// Login 用户登录
+func (a *AuthService) Login(c *gin.Context) {
+	var req LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[AUTH] Invalid login request: %v", err)
+		c.JSON(http.StatusBadRequest, LoginResponse{
+			Success: false,
+			Message: "无效的请求参数",
+		})
+		return
+	}
+
+	log.Printf("[AUTH] Login attempt for: %s", req.Username)
+
+	// 尝试通过用户名获取用户
+	user, err := a.db.GetUserByUsername(req.Username)
+	if err != nil {
+		// 如果用户名找不到，尝试通过邮箱获取
+		log.Printf("[AUTH] User not found by username, trying email: %s", req.Username)
+		user, err = a.db.GetUserByEmail(req.Username)
+		if err != nil {
+			log.Printf("[AUTH] User not found by username or email: %s", req.Username)
+			c.JSON(http.StatusUnauthorized, LoginResponse{
+				Success: false,
+				Message: "用户名或密码错误",
+			})
+			return
+		}
+	}
+
+	// 验证密码
+	if !a.CheckPasswordHash(req.Password, user.PasswordHash) {
+		log.Printf("[AUTH] Password mismatch for user: %s", user.Username)
+		// 兼容旧的全局密码模式 (如果用户没有设置密码哈希，且输入的是全局密码)
+		if user.PasswordHash == "" && req.Password == a.config.ServerPassword {
+			log.Printf("[AUTH] Legacy password matched for user: %s", user.Username)
+		} else {
+			c.JSON(http.StatusUnauthorized, LoginResponse{
+				Success: false,
+				Message: "用户名或密码错误",
+			})
+			return
+		}
 	}
 
 	// 生成 JWT Token
 	token, err := a.GenerateToken(user.ID, user.Username)
 	if err != nil {
+		log.Printf("[AUTH] Token generation failed: %v", err)
 		c.JSON(http.StatusInternalServerError, LoginResponse{
 			Success: false,
 			Message: "生成 Token 失败",
@@ -88,6 +158,7 @@ func (a *AuthService) Login(c *gin.Context) {
 
 	// 更新用户 Token
 	if err := a.db.UpdateUserToken(user.ID, token); err != nil {
+		log.Printf("[AUTH] Update token failed: %v", err)
 		c.JSON(http.StatusInternalServerError, LoginResponse{
 			Success: false,
 			Message: "更新 Token 失败",
@@ -95,11 +166,25 @@ func (a *AuthService) Login(c *gin.Context) {
 		return
 	}
 
+	log.Printf("[AUTH] User logged in successfully: id=%d, username=%s", user.ID, user.Username)
+
 	c.JSON(http.StatusOK, LoginResponse{
 		Success: true,
 		Token:   token,
 		UserID:  user.ID,
 	})
+}
+
+// HashPassword 生成密码哈希
+func (a *AuthService) HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+// CheckPasswordHash 验证密码哈希
+func (a *AuthService) CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
 }
 
 // GenerateToken 生成 JWT Token

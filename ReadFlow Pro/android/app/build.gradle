@@ -87,13 +87,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.virgoooooox.ReadFlow'
+    namespace 'com.readflow.pro'
     defaultConfig {
-        applicationId 'com.virgoooooox.ReadFlow'
+        applicationId 'com.readflow.pro'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "Pro"
+        versionName "0.0.1"
     }
     signingConfigs {
         debug {

@@ -153,7 +153,7 @@ func (db *DB) GetPendingDeliveries(userID int64, limit int) ([]*Item, error) {
 	}
 	defer rows.Close()
 
-	var items []*Item
+	items := make([]*Item, 0)
 	for rows.Next() {
 		item := &Item{}
 		err := rows.Scan(
@@ -164,7 +164,7 @@ func (db *DB) GetPendingDeliveries(userID int64, limit int) ([]*Item, error) {
 			&item.SourceTitle, &item.SourceURL,
 		)
 		if err != nil {
-			return nil, err
+			return items, err
 		}
 		items = append(items, item)
 	}
@@ -189,11 +189,11 @@ func (db *DB) GetPendingDeliveriesBySourceURL(userID int64, sourceURL string, li
 	`, userID, sourceURL, limit)
 
 	if err != nil {
-		return nil, err
+		return make([]*Item, 0), err
 	}
 	defer rows.Close()
 
-	var items []*Item
+	items := make([]*Item, 0)
 	for rows.Next() {
 		item := &Item{}
 		err := rows.Scan(
@@ -204,7 +204,7 @@ func (db *DB) GetPendingDeliveriesBySourceURL(userID int64, sourceURL string, li
 			&item.SourceTitle, &item.SourceURL,
 		)
 		if err != nil {
-			return nil, err
+			return items, err
 		}
 		items = append(items, item)
 	}

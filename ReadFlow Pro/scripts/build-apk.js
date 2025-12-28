@@ -36,7 +36,7 @@ const commonEnv = {
 // 显示帮助信息
 function showHelp() {
   console.log(`
-📦 ReadFlow APK 构建脚本
+📦 ReadFlow Pro APK 构建脚本
 
 用法: node scripts/build-apk.js [options]
 
@@ -338,7 +338,7 @@ function calculateVersionCode(versionString) {
 try {
   const projectRoot = path.join(__dirname, '..');
 
-  console.log('\n🚀 开始构建 ReadFlow APK...\n');
+  console.log('\n🚀 开始构建 ReadFlow Pro APK...\n');
 
   if (fastBuild) {
     console.log('⚡ 快速构建模式 - 跳过缓存清除');
@@ -450,7 +450,7 @@ ${changelogItems}
 };
 
 export const APP_INFO = {
-  name: 'ReadFlow',
+  name: 'ReadFlow Pro',
   description: '一款专注英语阅读学习的应用',
 };
 `;
@@ -490,7 +490,7 @@ export const APP_INFO = {
   });
 
   // 重命名 APK
-  const apkName = `ReadFlow-${version}${targetArch !== 'all' ? '-' + targetArch : ''}.apk`;
+  const apkName = `ReadFlowPro-${version}${targetArch !== 'all' ? '-' + targetArch : ''}.apk`;
   const originalApkPath = path.join(projectRoot, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
   const newApkPath = path.join(projectRoot, 'android', 'app', 'build', 'outputs', 'apk', 'release', apkName);
 

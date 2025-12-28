@@ -1,10 +1,10 @@
-# ReadFlow - 极简主义、智能驱动的深度阅读器
+# ReadFlow Pro - 极简主义、智能驱动的深度阅读器
 
 [![React Native](https://img.shields.io/badge/React%20Native-0.79.6-blue)](https://reactnative.dev/)
 [![Expo](https://img.shields.io/badge/Expo-53.0.0-black)](https://expo.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 
-ReadFlow 是一款专为深阅读设计的移动端 RSS 阅读器。它不仅是一个内容聚合器，更是一个集成了 LLM 智能翻译、交互式生词本及极致动画体验的语言学习利器。
+ReadFlow Pro 是一款专为深阅读设计的移动端 RSS 阅读器。它不仅是一个内容聚合器，更是一个集成了 LLM 智能翻译、交互式生词本及极致动画体验的语言学习利器。
 
 ## 🌟 核心亮点 (New in v2.1.0)
 
@@ -74,4 +74,4 @@ node scripts/build-apk.js --version 2.1.0 --arch arm64 --open
 
 ---
 
-Made with ❤️ by the ReadFlow Team
+Made with ❤️ by the ReadFlow Pro Team

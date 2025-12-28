@@ -8,6 +8,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
+      # 注意：如果遇到 "readonly database" 错误，请确保主机上的 ./data 目录
+      # 对 UID 1000 (appuser) 有写权限。或者使用命名卷：
+      # - readflow_data:/app/data
       - ./data:/app/data
       - ./static:/app/static
     environment:

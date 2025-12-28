@@ -16,9 +16,26 @@ type DB struct {
 
 // New 创建新的数据库连接
 func New(dbPath string) (*DB, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	// 使用更健壮的连接字符串，显式设置模式和超时
+	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=ON", dbPath)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// 验证连接是否可写
+	var readonly string
+	err = db.QueryRow("PRAGMA readonly").Scan(&readonly)
+	if err != nil {
+		// 如果 PRAGMA 不返回结果，通常意味着它是旧版本 SQLite 或不可写模式下的特殊表现
+		// 我们可以尝试执行一个轻量级的写操作来最终确认
+		log.Printf("[DEBUG] PRAGMA readonly failed or returned no rows: %v. Trying fallback check...", err)
+		_, err = db.Exec("CREATE TABLE IF NOT EXISTS _write_test (id INTEGER PRIMARY KEY); DROP TABLE _write_test;")
+		if err != nil {
+			return nil, fmt.Errorf("database is NOT writable: %w", err)
+		}
+	} else if readonly == "1" || readonly == "true" {
+		return nil, fmt.Errorf("database is opened in READ-ONLY mode, check file permissions")
 	}
 
 	// 配置连接池 - SQLite 优化
@@ -26,28 +43,202 @@ func New(dbPath string) (*DB, error) {
 	db.SetMaxIdleConns(1)            // 保持一个空闲连接
 	db.SetConnMaxLifetime(time.Hour) // 连接最长生命周期
 
-	// 启用 WAL 模式和优化配置
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		return nil, fmt.Errorf("failed to enable WAL: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA synchronous=NORMAL;"); err != nil {
-		return nil, fmt.Errorf("failed to set synchronous mode: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA busy_timeout=5000;"); err != nil {
-		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA foreign_keys=ON;"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
-	}
-
-	// 初始化数据库表结构
+	// 1. 首先确保基础表结构存在
+	// 使用 CREATE TABLE IF NOT EXISTS 保证幂等性
 	if _, err := db.Exec(Schema); err != nil {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// 2. 然后再执行增量迁移逻辑
+	// 此时所有基础表已经存在，migrate() 中的 ALTER TABLE 不会报错
+	database := &DB{db}
+	if err := database.migrate(); err != nil {
+		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	}
+
 	log.Println("Database initialized successfully")
 
-	return &DB{db}, nil
+	return database, nil
+}
+
+// migrate 处理简单的数据库迁移
+func (db *DB) migrate() error {
+	// 检查 sources 表是否存在 category 列
+	if !db.columnExists("sources", "category") {
+		log.Println("[Migration] Adding column 'category' to 'sources' table")
+		if _, err := db.Exec("ALTER TABLE sources ADD COLUMN category TEXT DEFAULT 'Technology'"); err != nil {
+			return err
+		}
+	}
+	// 确保 category 索引存在
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_sources_category ON sources(category)"); err != nil {
+		log.Printf("[Migration] Warning: Failed to create idx_sources_category: %v", err)
+	}
+
+	// 检查 sources 表是否存在 language 列
+	if !db.columnExists("sources", "language") {
+		log.Println("[Migration] Adding column 'language' to 'sources' table")
+		if _, err := db.Exec("ALTER TABLE sources ADD COLUMN language TEXT DEFAULT 'en'"); err != nil {
+			return err
+		}
+	}
+	// 确保 language 索引存在
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_sources_language ON sources(language)"); err != nil {
+		log.Printf("[Migration] Warning: Failed to create idx_sources_language: %v", err)
+	}
+
+	// 检查 items 表是否存在 category 列
+	if !db.columnExists("items", "category") {
+		log.Println("[Migration] Adding column 'category' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN category TEXT"); err != nil {
+			return err
+		}
+	}
+	// 确保 category 索引存在
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_items_category ON items(category)"); err != nil {
+		log.Printf("[Migration] Warning: Failed to create idx_items_category: %v", err)
+	}
+
+	// 检查 items 表是否存在 content 列
+	if !db.columnExists("items", "content") {
+		log.Println("[Migration] Adding column 'content' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN content TEXT"); err != nil {
+			return err
+		}
+	}
+
+	// 检查 items 表是否存在 difficulty 列
+	if !db.columnExists("items", "difficulty") {
+		log.Println("[Migration] Adding column 'difficulty' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN difficulty TEXT DEFAULT 'medium'"); err != nil {
+			return err
+		}
+	}
+	// 确保 difficulty 索引存在
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_items_difficulty ON items(difficulty)"); err != nil {
+		log.Printf("[Migration] Warning: Failed to create idx_items_difficulty: %v", err)
+	}
+
+	// 检查 items 表是否存在 url 列
+	if !db.columnExists("items", "url") {
+		log.Println("[Migration] Adding column 'url' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN url TEXT"); err != nil {
+			return err
+		}
+	}
+	// 确保 url 索引存在
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_items_url ON items(url)"); err != nil {
+		log.Printf("[Migration] Warning: Failed to create idx_items_url: %v", err)
+	}
+
+	// 检查 items 表是否存在 tags 列
+	if !db.columnExists("items", "tags") {
+		log.Println("[Migration] Adding column 'tags' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN tags TEXT"); err != nil {
+			return err
+		}
+	}
+
+	// 检查 items 表是否存在 image_caption 列
+	if !db.columnExists("items", "image_caption") {
+		log.Println("[Migration] Adding column 'image_caption' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN image_caption TEXT"); err != nil {
+			return err
+		}
+	}
+
+	// 检查 items 表是否存在 image_credit 列
+	if !db.columnExists("items", "image_credit") {
+		log.Println("[Migration] Adding column 'image_credit' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN image_credit TEXT"); err != nil {
+			return err
+		}
+	}
+
+	// 检查 user_deliveries 表
+	if !db.columnExists("user_deliveries", "is_read") {
+		log.Println("[Migration] Adding column 'is_read' to 'user_deliveries' table")
+		if _, err := db.Exec("ALTER TABLE user_deliveries ADD COLUMN is_read BOOLEAN DEFAULT 0"); err != nil {
+			return err
+		}
+	}
+	// 确保 is_read 索引存在
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_deliveries_user_read ON user_deliveries(user_id, is_read)"); err != nil {
+		log.Printf("[Migration] Warning: Failed to create idx_deliveries_user_read: %v", err)
+	}
+	if !db.columnExists("user_deliveries", "scroll_position") {
+		log.Println("[Migration] Adding column 'scroll_position' to 'user_deliveries' table")
+		if _, err := db.Exec("ALTER TABLE user_deliveries ADD COLUMN scroll_position INTEGER DEFAULT 0"); err != nil {
+			return err
+		}
+	}
+	if !db.columnExists("user_deliveries", "user_tags") {
+		log.Println("[Migration] Adding column 'user_tags' to 'user_deliveries' table")
+		if _, err := db.Exec("ALTER TABLE user_deliveries ADD COLUMN user_tags TEXT"); err != nil {
+			return err
+		}
+	}
+	if !db.columnExists("user_deliveries", "reading_time_spent") {
+		log.Println("[Migration] Adding column 'reading_time_spent' to 'user_deliveries' table")
+		if _, err := db.Exec("ALTER TABLE user_deliveries ADD COLUMN reading_time_spent INTEGER DEFAULT 0"); err != nil {
+			return err
+		}
+	}
+	if !db.columnExists("user_deliveries", "last_read_at") {
+		log.Println("[Migration] Adding column 'last_read_at' to 'user_deliveries' table")
+		if _, err := db.Exec("ALTER TABLE user_deliveries ADD COLUMN last_read_at DATETIME"); err != nil {
+			return err
+		}
+	}
+
+	// 检查 users 表
+	if !db.columnExists("users", "email") {
+		log.Println("[Migration] Adding column 'email' to 'users' table")
+		if _, err := db.Exec("ALTER TABLE users ADD COLUMN email TEXT"); err != nil {
+			return err
+		}
+		// 添加索引
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"); err != nil {
+			log.Printf("[Migration] Warning: Failed to create idx_users_email: %v", err)
+		}
+	}
+
+	if !db.columnExists("users", "password_hash") {
+		log.Println("[Migration] Adding column 'password_hash' to 'users' table")
+		if _, err := db.Exec("ALTER TABLE users ADD COLUMN password_hash TEXT"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// columnExists 检查表中是否存在指定列
+func (db *DB) columnExists(tableName, columnName string) bool {
+	query := fmt.Sprintf("PRAGMA table_info(%s)", tableName)
+	rows, err := db.Query(query)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			dataType  string
+			notnull   int
+			dfltValue interface{}
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &dataType, &notnull, &dfltValue, &pk); err != nil {
+			continue
+		}
+		if name == columnName {
+			return true
+		}
+	}
+	return false
 }
 
 // Close 关闭数据库连接
@@ -59,11 +250,13 @@ func (db *DB) Close() error {
 
 // User 用户
 type User struct {
-	ID          int64
-	Username    string
-	Token       string
-	CreatedAt   time.Time
-	LastLoginAt *time.Time
+	ID           int64
+	Username     string
+	Email        string
+	PasswordHash string
+	Token        string
+	CreatedAt    time.Time
+	LastLoginAt  *time.Time
 }
 
 // Source 订阅源
@@ -89,27 +282,27 @@ type Subscription struct {
 
 // Item 文章
 type Item struct {
-	ID          int64
-	SourceID    int64
-	GUID        string
-	Title       string
-	XMLContent  string
-	ImagePaths  string
-	PublishedAt *time.Time
-	CreatedAt   time.Time
+	ID          int64      `json:"ID"`
+	SourceID    int64      `json:"SourceID"`
+	GUID        string     `json:"GUID"`
+	Title       string     `json:"Title"`
+	XMLContent  string     `json:"XMLContent"`
+	ImagePaths  string     `json:"ImagePaths"`
+	PublishedAt *time.Time `json:"PublishedAt"`
+	CreatedAt   time.Time  `json:"CreatedAt"`
 	// Quest 3: 新增字段
-	Summary      string
-	WordCount    int
-	ReadingTime  int
-	CoverImage   string
-	Author       string
-	CleanContent string
-	Content      string // Original content
-	ContentHash  string
-	ImageCaption string // Added
-	ImageCredit  string // Added
-	SourceTitle  string // Added for sync
-	SourceURL    string // Added for sync
+	Summary      string `json:"Summary"`
+	WordCount    int    `json:"WordCount"`
+	ReadingTime  int    `json:"ReadingTime"`
+	CoverImage   string `json:"CoverImage"`
+	Author       string `json:"Author"`
+	CleanContent string `json:"CleanContent"`
+	Content      string `json:"Content"` // Original content
+	ContentHash  string `json:"ContentHash"`
+	ImageCaption string `json:"ImageCaption"` // Added
+	ImageCredit  string `json:"ImageCredit"`  // Added
+	SourceTitle  string `json:"SourceTitle"`  // Added for sync
+	SourceURL    string `json:"SourceURL"`    // Added for sync
 }
 
 // UserArticle 用户视角的文章（包含源信息与投递状态）

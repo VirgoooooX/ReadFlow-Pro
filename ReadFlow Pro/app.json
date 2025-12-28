@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "ReadFlow Pro",
-    "slug": "ReadFlow Pro",
-    "version": "Pro",
+    "slug": "readflow-pro",
+    "version": "0.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,10 +17,16 @@
       "backgroundColor": "#E6FBFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.readflow.pro",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
-      "package": "com.virgoooooox.ReadFlow",
+      "package": "com.readflow.pro",
       "versionCode": 1,
       "splash": {
         "image": "./assets/transparent.png",

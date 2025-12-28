@@ -6,6 +6,8 @@ const Schema = `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
+    email TEXT,
+    password_hash TEXT,
     token TEXT UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_login_at DATETIME
@@ -37,8 +39,6 @@ CREATE TABLE IF NOT EXISTS sources (
 
 CREATE INDEX IF NOT EXISTS idx_sources_url ON sources(url);
 CREATE INDEX IF NOT EXISTS idx_sources_active_fetch ON sources(is_active, last_fetch_time);
-CREATE INDEX IF NOT EXISTS idx_sources_category ON sources(category);
-CREATE INDEX IF NOT EXISTS idx_sources_language ON sources(language);
 
 -- 用户订阅关系表（用户专属配置）
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -95,9 +95,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_items_source_guid ON items(source_id, guid
 CREATE INDEX IF NOT EXISTS idx_items_published ON items(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_items_source_published ON items(source_id, published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_items_hash ON items(content_hash);
-CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
-CREATE INDEX IF NOT EXISTS idx_items_difficulty ON items(difficulty);
-CREATE INDEX IF NOT EXISTS idx_items_url ON items(url);
 
 -- 用户投递状态表
 CREATE TABLE IF NOT EXISTS user_deliveries (
@@ -125,7 +122,6 @@ CREATE INDEX IF NOT EXISTS idx_deliveries_item ON user_deliveries(item_id);
 CREATE INDEX IF NOT EXISTS idx_deliveries_user_status_item ON user_deliveries(user_id, status, item_id);
 CREATE INDEX IF NOT EXISTS idx_deliveries_favorite ON user_deliveries(user_id, is_favorite);
 CREATE INDEX IF NOT EXISTS idx_deliveries_updated ON user_deliveries(updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_deliveries_user_read ON user_deliveries(user_id, is_read);
 
 -- 生词本表（完整版，已包含所有字段）
 CREATE TABLE IF NOT EXISTS vocabularies (

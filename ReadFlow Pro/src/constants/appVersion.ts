@@ -2,29 +2,22 @@
 // 此文件由构建脚本自动更新，请勿手动修改
 
 export const APP_VERSION = {
-  version: 'Pro',
+  version: '0.0.1',
   buildNumber: 1,
   updateTime: '2025-12-27',
   changelog: [
-    '实现应用启动时自动刷新RSS源功能',
-    '优化RSS同步性能并添加批量刷新功能',
-    '升级应用版本至5.3.1',
-    '在CacheEventData接口中添加reason字段记录刷新触发原因',
-    '优化HomeScreen的防抖刷新逻辑，取消等待中的刷新任务',
-    '添加RSSHub URL验证逻辑，支持更多特殊字符',
-    '优化ArticleService的标记已读/未读逻辑，减少不必要刷新',
-    '统一使用logger替代console.log进行日志记录',
-    '修复HomeScreen穿透标签时的空页面问题',
-    '优化RSSSourceContext的同步逻辑，仅在新增文章时触发刷新',
-    '优化RSSHub协议处理并添加事件触发原因',
-    '为标记已读/未读操作添加reason参数',
-    '忽略标记已读触发的统计更新以避免不必要刷新',
-    '改进URL验证和处理逻辑',
-    '替换console.log为logger调用',
+    '重构RSS架构为服务端处理并添加图片压缩选项',
+    '将RSS处理逻辑迁移到服务端，移除客户端LocalRSSService',
+    '新增图片压缩功能，可在设置中配置',
+    '更新服务端同步接口支持图片压缩参数',
+    '重构ProxyRSSService以适配服务端JSON数据',
+    '更新Dockerfile优化构建流程',
+    '修改数据库结构支持原始内容和压缩内容',
+    'initial gitignore',
   ],
 };
 
 export const APP_INFO = {
-  name: 'ReadFlow',
+  name: 'ReadFlow Pro',
   description: '一款专注英语阅读学习的应用',
 };

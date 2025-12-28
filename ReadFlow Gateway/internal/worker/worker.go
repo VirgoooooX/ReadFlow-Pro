@@ -259,10 +259,19 @@ func (w *Worker) FetchAllSourcesForUser(userID int64) error {
 
 // fetchSource 抓取单个源
 func (w *Worker) fetchSource(source *db.Source) error {
-	log.Printf("Fetching source: %s", source.URL)
+	url := source.URL
+	log.Printf("Fetching source: %s", url)
+
+	// 处理 rsshub:// 协议
+	if strings.HasPrefix(url, "rsshub://") {
+		rsshubHost := "https://rsshub.app"
+		// 如果将来有配置，可以从 w.config 获取
+		url = rsshubHost + "/" + strings.TrimPrefix(url, "rsshub://")
+		log.Printf("[WORKER] Transforming rsshub:// to %s", url)
+	}
 
 	// 解析 RSS
-	feed, err := w.parser.ParseURL(source.URL)
+	feed, err := w.parser.ParseURL(url)
 	if err != nil {
 		return fmt.Errorf("parse RSS failed: %w", err)
 	}

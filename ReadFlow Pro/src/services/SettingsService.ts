@@ -431,11 +431,13 @@ export class SettingsService {
    */
   public async clearAllSettings(): Promise<void> {
     try {
-      await Promise.all([
-        AsyncStorage.removeItem(SettingsService.STORAGE_KEYS.READING_SETTINGS),
-        AsyncStorage.removeItem(SettingsService.STORAGE_KEYS.APP_SETTINGS),
-        AsyncStorage.removeItem(SettingsService.STORAGE_KEYS.USER_PREFERENCES),
-      ]);
+      const keys = Object.values(SettingsService.STORAGE_KEYS);
+      await AsyncStorage.multiRemove(keys);
+      // 清除所有 AsyncStorage 数据（包括 AuthToken 等）
+      const allKeys = await AsyncStorage.getAllKeys();
+      if (allKeys.length > 0) {
+        await AsyncStorage.multiRemove(allKeys);
+      }
     } catch (error) {
       logger.error('Error clearing settings:', error);
       throw new AppError({
@@ -789,8 +791,8 @@ export class SettingsService {
       const configStr = await AsyncStorage.getItem(SettingsService.STORAGE_KEYS.PROXY_MODE_CONFIG);
       if (!configStr) {
         return { 
-          enabled: false, 
-          serverUrl: '', 
+          enabled: true, 
+          serverUrl: 'http://192.168.31.27:8080', 
           serverPassword: '' 
         };
       }
@@ -798,8 +800,8 @@ export class SettingsService {
     } catch (error) {
       logger.error('Error getting proxy mode config:', error);
       return { 
-        enabled: false, 
-        serverUrl: '', 
+        enabled: true, 
+        serverUrl: 'http://192.168.31.27:8080', 
         serverPassword: '' 
       };
     }

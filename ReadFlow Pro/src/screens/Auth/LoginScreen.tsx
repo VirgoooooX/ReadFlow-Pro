@@ -105,7 +105,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
               color={theme?.colors?.primary || '#6750A4'} 
             />
           </View>
-          <Text style={styles.title}>ReadFlow</Text>
+          <Text style={styles.title}>ReadFlow Pro</Text>
           <Text style={styles.subtitle}>登录您的账户</Text>
         </View>
 

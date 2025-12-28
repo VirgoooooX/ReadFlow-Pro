@@ -8,21 +8,31 @@ import (
 
 // User 相关操作
 
-// CreateOrGetUser 创建或获取用户
-func (db *DB) CreateOrGetUser(username string) (*User, error) {
-	// 先尝试查找
-	user, err := db.GetUserByUsername(username)
+// CreateUser 创建新用户
+func (db *DB) CreateUser(username, email, passwordHash string) (*User, error) {
+	// 检查用户是否存在
+	_, err := db.GetUserByUsername(username)
 	if err == nil {
-		return user, nil
+		return nil, fmt.Errorf("username already exists")
 	}
 	if err != sql.ErrNoRows {
 		return nil, err
 	}
 
-	// 不存在则创建
+	// 检查邮箱是否存在 (如果提供了邮箱)
+	if email != "" {
+		_, err := db.GetUserByEmail(email)
+		if err == nil {
+			return nil, fmt.Errorf("email already exists")
+		}
+		if err != sql.ErrNoRows {
+			return nil, err
+		}
+	}
+
 	result, err := db.Exec(
-		"INSERT INTO users (username) VALUES (?)",
-		username,
+		"INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+		username, email, passwordHash,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
@@ -36,13 +46,27 @@ func (db *DB) CreateOrGetUser(username string) (*User, error) {
 	return db.GetUserByID(id)
 }
 
+// CreateOrGetUser 创建或获取用户 (Legacy support, no password)
+func (db *DB) CreateOrGetUser(username string) (*User, error) {
+	// 尝试直接插入，如果已存在则忽略 (原子操作更安全)
+	_, err := db.Exec(
+		"INSERT OR IGNORE INTO users (username, created_at, last_login_at) VALUES (?, ?, ?)",
+		username, time.Now(), time.Now(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure user exists: %w", err)
+	}
+
+	return db.GetUserByUsername(username)
+}
+
 // GetUserByID 根据 ID 获取用户
 func (db *DB) GetUserByID(id int64) (*User, error) {
 	user := &User{}
 	err := db.QueryRow(
-		"SELECT id, username, COALESCE(token, ''), created_at, last_login_at FROM users WHERE id = ?",
+		"SELECT id, username, COALESCE(email, ''), COALESCE(password_hash, ''), COALESCE(token, ''), created_at, last_login_at FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Token, &user.CreatedAt, &user.LastLoginAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Token, &user.CreatedAt, &user.LastLoginAt)
 
 	if err != nil {
 		return nil, err
@@ -54,9 +78,23 @@ func (db *DB) GetUserByID(id int64) (*User, error) {
 func (db *DB) GetUserByUsername(username string) (*User, error) {
 	user := &User{}
 	err := db.QueryRow(
-		"SELECT id, username, COALESCE(token, ''), created_at, last_login_at FROM users WHERE username = ?",
+		"SELECT id, username, COALESCE(email, ''), COALESCE(password_hash, ''), COALESCE(token, ''), created_at, last_login_at FROM users WHERE username = ?",
 		username,
-	).Scan(&user.ID, &user.Username, &user.Token, &user.CreatedAt, &user.LastLoginAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Token, &user.CreatedAt, &user.LastLoginAt)
+
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// GetUserByEmail 根据邮箱获取用户
+func (db *DB) GetUserByEmail(email string) (*User, error) {
+	user := &User{}
+	err := db.QueryRow(
+		"SELECT id, username, COALESCE(email, ''), COALESCE(password_hash, ''), COALESCE(token, ''), created_at, last_login_at FROM users WHERE email = ?",
+		email,
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Token, &user.CreatedAt, &user.LastLoginAt)
 
 	if err != nil {
 		return nil, err
@@ -68,9 +106,9 @@ func (db *DB) GetUserByUsername(username string) (*User, error) {
 func (db *DB) GetUserByToken(token string) (*User, error) {
 	user := &User{}
 	err := db.QueryRow(
-		"SELECT id, username, COALESCE(token, ''), created_at, last_login_at FROM users WHERE token = ?",
+		"SELECT id, username, COALESCE(email, ''), COALESCE(password_hash, ''), COALESCE(token, ''), created_at, last_login_at FROM users WHERE token = ?",
 		token,
-	).Scan(&user.ID, &user.Username, &user.Token, &user.CreatedAt, &user.LastLoginAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.PasswordHash, &user.Token, &user.CreatedAt, &user.LastLoginAt)
 
 	if err != nil {
 		return nil, err

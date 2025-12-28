@@ -82,7 +82,15 @@ func main() {
 
 // setupRoutes 设置所有路由
 func setupRoutes(cfg *config.Config, database *db.DB, w *worker.Worker) *gin.Engine {
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Logger())
+	router.Use(gin.Recovery())
+
+	// 添加请求详细日志
+	router.Use(func(c *gin.Context) {
+		log.Printf("[REQ] %s %s from %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
+		c.Next()
+	})
 
 	// 添加 CORS 中间件
 	router.Use(func(c *gin.Context) {
@@ -109,6 +117,7 @@ func setupRoutes(cfg *config.Config, database *db.DB, w *worker.Worker) *gin.Eng
 	authGroup := router.Group("/api/auth")
 	{
 		authGroup.POST("/login", authService.Login)
+		authGroup.POST("/register", authService.Register)
 	}
 
 	// 订阅 API（需要认证）
@@ -183,8 +192,8 @@ func setupRoutes(cfg *config.Config, database *db.DB, w *worker.Worker) *gin.Eng
 		adminGroup.POST("/sources/clear-items", adminHandler.ClearSourceItems)
 	}
 
-	// 健康检查
-	router.GET("/health", func(c *gin.Context) {
+	// 健康检查 (支持 GET 和 HEAD)
+	router.Match([]string{"GET", "HEAD"}, "/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "ok",
 			"time":   time.Now(),
