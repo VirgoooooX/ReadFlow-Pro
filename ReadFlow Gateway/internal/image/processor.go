@@ -1,10 +1,12 @@
 package image
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image/jpeg"
 	"io"
 	"log"
 	"net/http"
@@ -437,4 +439,68 @@ func (p *Processor) getReferer(targetURL string) string {
 // Shutdown 关闭处理器
 func (p *Processor) Shutdown() {
 	vips.Shutdown()
+}
+
+// GetDominantColorFromURL 下载图片并提取主色调
+func (p *Processor) GetDominantColorFromURL(url string) (string, error) {
+	if url == "" {
+		return "", nil
+	}
+	data, err := p.downloadImage(url)
+	if err != nil {
+		return "", err
+	}
+	return p.extractDominantColor(data)
+}
+
+// extractDominantColor 从图片数据中提取主色调
+func (p *Processor) extractDominantColor(data []byte) (string, error) {
+	img, err := vips.NewImageFromBuffer(data)
+	if err != nil {
+		return "", err
+	}
+	defer img.Close()
+
+	// Resize to 10x10 to reduce processing
+	if err := img.Thumbnail(10, 10, vips.InterestingCentre); err != nil {
+		return "", err
+	}
+
+	// Export as JPEG for easy decoding
+	ep := vips.NewJpegExportParams()
+	ep.Quality = 80
+	jpgBytes, _, err := img.ExportJpeg(ep)
+	if err != nil {
+		return "", err
+	}
+
+	// Decode with Go standard lib
+	goImg, err := jpeg.Decode(bytes.NewReader(jpgBytes))
+	if err != nil {
+		return "", err
+	}
+
+	// Calculate Average
+	bounds := goImg.Bounds()
+	var r, g, b, count uint64
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			pr, pg, pb, _ := goImg.At(x, y).RGBA()
+			r += uint64(pr)
+			g += uint64(pg)
+			b += uint64(pb)
+			count++
+		}
+	}
+
+	if count == 0 {
+		return "", fmt.Errorf("empty image")
+	}
+
+	// RGBA returns 0-65535, we want 0-255
+	r = (r / count) >> 8
+	g = (g / count) >> 8
+	b = (b / count) >> 8
+
+	return fmt.Sprintf("#%02x%02x%02x", r, g, b), nil
 }

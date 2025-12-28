@@ -7,7 +7,6 @@ export { RSSService, rssService } from './RSSService';
 
 // 子服务
 export { ProxyRSSService, proxyRSSService } from './ProxyRSSService';
-export { ImageLocalizer, imageLocalizer } from './ImageLocalizer';
 
 // 工具函数
 export * from './RSSUtils';

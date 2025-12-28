@@ -408,7 +408,6 @@ export class RSSGroupService {
       lastFetchAt: row.last_updated ? new Date(row.last_updated) : undefined,
       errorCount: row.error_count || 0,
       description: row.description,
-      updateFrequency: row.update_frequency,
       article_count: row.article_count,
       unread_count: row.unread_count,
       last_updated: row.last_updated,

@@ -120,6 +120,13 @@ func setupRoutes(cfg *config.Config, database *db.DB, w *worker.Worker) *gin.Eng
 		authGroup.POST("/register", authService.Register)
 	}
 
+	// 用户 API（需要认证）
+	userGroup := router.Group("/api/user")
+	userGroup.Use(authService.AuthMiddleware())
+	{
+		userGroup.POST("/profile", authService.UpdateProfile)
+	}
+
 	// 订阅 API（需要认证）
 	subscribeGroup := router.Group("/api")
 	subscribeGroup.Use(authService.AuthMiddleware())

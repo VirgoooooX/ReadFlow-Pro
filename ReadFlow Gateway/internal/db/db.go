@@ -155,6 +155,14 @@ func (db *DB) migrate() error {
 		}
 	}
 
+	// 检查 items 表是否存在 image_primary_color 列
+	if !db.columnExists("items", "image_primary_color") {
+		log.Println("[Migration] Adding column 'image_primary_color' to 'items' table")
+		if _, err := db.Exec("ALTER TABLE items ADD COLUMN image_primary_color TEXT"); err != nil {
+			return err
+		}
+	}
+
 	// 检查 user_deliveries 表
 	if !db.columnExists("user_deliveries", "is_read") {
 		log.Println("[Migration] Adding column 'is_read' to 'user_deliveries' table")
@@ -259,6 +267,24 @@ type User struct {
 	LastLoginAt  *time.Time
 }
 
+// UserPreference 用户偏好设置
+type UserPreference struct {
+	UserID                    int64  `json:"user_id"`
+	ReadingSettings           string `json:"reading_settings"` // JSON string
+	TranslationProvider       string `json:"translation_provider"`
+	EnableAutoTranslation     bool   `json:"enable_auto_translation"`
+	EnableTitleTranslation    bool   `json:"enable_title_translation"`
+	MaxConcurrentTranslations int    `json:"max_concurrent_translations"`
+	TranslationTimeout        int    `json:"translation_timeout"`
+	DefaultCategory           string `json:"default_category"`
+	EnableNotifications       bool   `json:"enable_notifications"`
+	ProxyModeEnabled          bool   `json:"proxy_mode_enabled"`
+	ProxyServerURL            string `json:"proxy_server_url"`
+	ProxyToken                string `json:"proxy_token"`
+	CreatedAt                 int64  `json:"created_at"`
+	UpdatedAt                 int64  `json:"updated_at"`
+}
+
 // Source 订阅源
 type Source struct {
 	ID            int64
@@ -291,18 +317,19 @@ type Item struct {
 	PublishedAt *time.Time `json:"PublishedAt"`
 	CreatedAt   time.Time  `json:"CreatedAt"`
 	// Quest 3: 新增字段
-	Summary      string `json:"Summary"`
-	WordCount    int    `json:"WordCount"`
-	ReadingTime  int    `json:"ReadingTime"`
-	CoverImage   string `json:"CoverImage"`
-	Author       string `json:"Author"`
-	CleanContent string `json:"CleanContent"`
-	Content      string `json:"Content"` // Original content
-	ContentHash  string `json:"ContentHash"`
-	ImageCaption string `json:"ImageCaption"` // Added
-	ImageCredit  string `json:"ImageCredit"`  // Added
-	SourceTitle  string `json:"SourceTitle"`  // Added for sync
-	SourceURL    string `json:"SourceURL"`    // Added for sync
+	Summary           string `json:"Summary"`
+	WordCount         int    `json:"WordCount"`
+	ReadingTime       int    `json:"ReadingTime"`
+	CoverImage        string `json:"CoverImage"`
+	Author            string `json:"Author"`
+	CleanContent      string `json:"CleanContent"`
+	Content           string `json:"Content"` // Original content
+	ContentHash       string `json:"ContentHash"`
+	ImageCaption      string `json:"ImageCaption"`      // Added
+	ImageCredit       string `json:"ImageCredit"`       // Added
+	ImagePrimaryColor string `json:"ImagePrimaryColor"` // Added
+	SourceTitle       string `json:"SourceTitle"`       // Added for sync
+	SourceURL         string `json:"SourceURL"`         // Added for sync
 }
 
 // UserArticle 用户视角的文章（包含源信息与投递状态）
@@ -319,16 +346,17 @@ type UserArticle struct {
 	SourceURL   string
 	Status      int
 	// Quest 3: 新增字段
-	Summary      string
-	WordCount    int
-	ReadingTime  int
-	CoverImage   string
-	Author       string
-	CleanContent string
-	Content      string // Original content
-	ContentHash  string
-	ImageCaption string // Added
-	ImageCredit  string // Added
+	Summary           string
+	WordCount         int
+	ReadingTime       int
+	CoverImage        string
+	Author            string
+	CleanContent      string
+	Content           string // Original content
+	ContentHash       string
+	ImageCaption      string // Added
+	ImageCredit       string // Added
+	ImagePrimaryColor string // Added
 	// Quest 5: 阅读状态字段
 	IsFavorite   bool
 	ReadProgress int

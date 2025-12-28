@@ -31,6 +31,7 @@ interface ServerItem {
   ContentHash: string;
   ImageCaption: string;
   ImageCredit: string;
+  ImagePrimaryColor: string;
   SourceTitle: string;
   SourceURL: string;
 }
@@ -347,6 +348,7 @@ export class ProxyRSSService {
           imageUrl: item.CoverImage,
           imageCaption: item.ImageCaption,
           imageCredit: item.ImageCredit,
+          imagePrimaryColor: item.ImagePrimaryColor,
           tags: [],
           category: 'General',
           wordCount: item.WordCount,

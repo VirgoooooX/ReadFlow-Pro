@@ -48,6 +48,21 @@ type LoginResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+// UpdateProfileRequest 更新用户资料请求
+type UpdateProfileRequest struct {
+	ReadingSettings           *string `json:"reading_settings"`
+	TranslationProvider       *string `json:"translation_provider"`
+	EnableAutoTranslation     *bool   `json:"enable_auto_translation"`
+	EnableTitleTranslation    *bool   `json:"enable_title_translation"`
+	MaxConcurrentTranslations *int    `json:"max_concurrent_translations"`
+	TranslationTimeout        *int    `json:"translation_timeout"`
+	DefaultCategory           *string `json:"default_category"`
+	EnableNotifications       *bool   `json:"enable_notifications"`
+	ProxyModeEnabled          *bool   `json:"proxy_mode_enabled"`
+	ProxyServerURL            *string `json:"proxy_server_url"`
+	ProxyToken                *string `json:"proxy_token"`
+}
+
 // Claims JWT 声明
 type Claims struct {
 	UserID   int64  `json:"user_id"`
@@ -172,6 +187,85 @@ func (a *AuthService) Login(c *gin.Context) {
 		Success: true,
 		Token:   token,
 		UserID:  user.ID,
+	})
+}
+
+// UpdateProfile 更新用户资料
+func (a *AuthService) UpdateProfile(c *gin.Context) {
+	userID, err := GetCurrentUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"message": "未授权",
+		})
+		return
+	}
+
+	var req UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "无效的请求参数",
+		})
+		return
+	}
+
+	// 获取当前配置，如果不存在则使用默认值
+	pref, err := a.db.GetUserPreferences(userID)
+	if err != nil {
+		// 假设不存在，使用默认值
+		pref = &db.UserPreference{
+			UserID: userID,
+		}
+	}
+
+	// 更新字段
+	if req.ReadingSettings != nil {
+		pref.ReadingSettings = *req.ReadingSettings
+	}
+	if req.TranslationProvider != nil {
+		pref.TranslationProvider = *req.TranslationProvider
+	}
+	if req.EnableAutoTranslation != nil {
+		pref.EnableAutoTranslation = *req.EnableAutoTranslation
+	}
+	if req.EnableTitleTranslation != nil {
+		pref.EnableTitleTranslation = *req.EnableTitleTranslation
+	}
+	if req.MaxConcurrentTranslations != nil {
+		pref.MaxConcurrentTranslations = *req.MaxConcurrentTranslations
+	}
+	if req.TranslationTimeout != nil {
+		pref.TranslationTimeout = *req.TranslationTimeout
+	}
+	if req.DefaultCategory != nil {
+		pref.DefaultCategory = *req.DefaultCategory
+	}
+	if req.EnableNotifications != nil {
+		pref.EnableNotifications = *req.EnableNotifications
+	}
+	if req.ProxyModeEnabled != nil {
+		pref.ProxyModeEnabled = *req.ProxyModeEnabled
+	}
+	if req.ProxyServerURL != nil {
+		pref.ProxyServerURL = *req.ProxyServerURL
+	}
+	if req.ProxyToken != nil {
+		pref.ProxyToken = *req.ProxyToken
+	}
+
+	if err := a.db.UpsertUserPreferences(pref); err != nil {
+		log.Printf("[AUTH] Failed to update user preferences: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "更新配置失败",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "配置已更新",
 	})
 }
 

@@ -229,6 +229,7 @@ export class SettingsService {
         translationTimeout: settings.translationTimeout,
         enableImageCompression: settings.enableImageCompression,
       });
+      this.triggerSync(settings);
     } catch (error) {
       logger.error('Error saving RSS settings:', error);
       throw new AppError({

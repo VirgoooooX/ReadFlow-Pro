@@ -149,7 +149,7 @@ const ArticleItem = memo(({ item, onPress, styles, isDark, theme, proxyServerUrl
       {/* 图片区域：固定尺寸，右侧展示 */}
       {imageUri && (
         <View style={styles.imageShadowWrapper}>
-          <View style={styles.imageContainer}>
+          <View style={[styles.imageContainer, item.imagePrimaryColor ? { backgroundColor: item.imagePrimaryColor } : undefined]}>
             <Image
               source={imageUri}
               style={styles.articleImage}

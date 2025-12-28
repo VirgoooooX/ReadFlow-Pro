@@ -15,6 +15,7 @@ export interface Article {
   imageUrl?: string;
   imageCaption?: string;   // 封面图片说明（来自 figcaption、alt 或 media:description）
   imageCredit?: string;    // 封面图片来源/版权（如 "Reuters"）
+  imagePrimaryColor?: string; // 封面图片主色调（用于预加载占位符）
   tags: string[];
   category: string;
   wordCount: number;
@@ -39,7 +40,6 @@ export interface RSSSource {
   lastFetchAt?: Date;
   errorCount: number;
   description?: string;
-  updateFrequency?: number;
   article_count?: number;
   unread_count?: number;
   last_updated?: string;

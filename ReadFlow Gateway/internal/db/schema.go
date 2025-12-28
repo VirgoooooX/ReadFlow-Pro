@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS items (
     tags TEXT,
     image_caption TEXT,
     image_credit TEXT,
+    image_primary_color TEXT,
     FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
 );
 

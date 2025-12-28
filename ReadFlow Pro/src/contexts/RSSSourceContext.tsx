@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { ToastAndroid, Platform } from 'react-native';
 import { RSSSource, RSSStartupSettings } from '../types';
 import { RSSService } from '../services/rss';
 import { SettingsService } from '../services/SettingsService';
@@ -174,6 +175,20 @@ export const RSSSourceProvider: React.FC<RSSSourceProviderProps> = ({ children }
   const deleteRSSSource = (sourceId: number) => {
     setRssSources(prev => prev.filter(source => source.id !== sourceId));
   };
+
+  /**
+   * 显示刷新结果提示
+   */
+  const showRefreshToast = (newCount: number) => {
+    const message = `已刷新，${newCount}篇新文章`;
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(message, ToastAndroid.SHORT);
+    } else {
+      // iOS 暂时不显示 toast，或可以后续添加自定义组件
+      console.log(`[Toast] ${message}`);
+    }
+  };
+
   const syncAllSources = async (onProgress?: (current: number, total: number, sourceName: string) => void) => {
     cacheEventEmitter.batchSyncStart();
     try {
@@ -246,6 +261,9 @@ export const RSSSourceProvider: React.FC<RSSSourceProviderProps> = ({ children }
       
       logger.info(`[RSSSourceContext.syncSources] ✅ 批量同步完成，新增文章: ${result.totalArticles}`);
       await loadRSSSources();
+      
+      // 显示刷新结果提示
+      showRefreshToast(result.totalArticles);
       
       // 只有当有新文章时才触发刷新
       if (result.totalArticles > 0) {

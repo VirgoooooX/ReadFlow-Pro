@@ -263,6 +263,9 @@ export class DatabaseService {
         url TEXT NOT NULL,
         guid TEXT,
         image_url TEXT,
+        image_caption TEXT,
+        image_credit TEXT,
+        image_primary_color TEXT,
         tags TEXT, -- JSON array
         category TEXT NOT NULL,
         word_count INTEGER NOT NULL,

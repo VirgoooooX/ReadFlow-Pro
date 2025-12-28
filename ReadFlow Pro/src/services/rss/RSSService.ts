@@ -215,10 +215,6 @@ export class RSSService {
         setClause.push('is_active = ?');
         values.push(updates.isActive ? 1 : 0);
       }
-      if (updates.updateFrequency !== undefined) {
-        setClause.push('update_frequency = ?');
-        values.push(updates.updateFrequency);
-      }
       if (updates.sourceMode !== undefined) {
         setClause.push('source_mode = ?');
         values.push(updates.sourceMode);
@@ -475,7 +471,6 @@ export class RSSService {
       isActive: Boolean(row.is_active),
       lastFetchAt: row.last_updated ? new Date(row.last_updated) : new Date(),
       errorCount: row.error_count || 0,
-      updateFrequency: row.update_frequency,
       article_count: row.article_count || 0,
       unread_count: row.unread_count || 0,
       last_updated: row.last_updated,

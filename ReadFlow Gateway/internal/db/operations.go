@@ -131,6 +131,66 @@ func (db *DB) DeleteUser(userID int64) error {
 	return err
 }
 
+// UpsertUserPreferences 更新或插入用户偏好设置
+func (db *DB) UpsertUserPreferences(pref *UserPreference) error {
+	_, err := db.Exec(`
+		INSERT INTO user_preferences (
+			user_id, reading_settings, translation_provider, 
+			enable_auto_translation, enable_title_translation, 
+			max_concurrent_translations, translation_timeout,
+			default_category, enable_notifications,
+			proxy_mode_enabled, proxy_server_url, proxy_token,
+			updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(user_id) DO UPDATE SET
+			reading_settings = excluded.reading_settings,
+			translation_provider = excluded.translation_provider,
+			enable_auto_translation = excluded.enable_auto_translation,
+			enable_title_translation = excluded.enable_title_translation,
+			max_concurrent_translations = excluded.max_concurrent_translations,
+			translation_timeout = excluded.translation_timeout,
+			default_category = excluded.default_category,
+			enable_notifications = excluded.enable_notifications,
+			proxy_mode_enabled = excluded.proxy_mode_enabled,
+			proxy_server_url = excluded.proxy_server_url,
+			proxy_token = excluded.proxy_token,
+			updated_at = excluded.updated_at
+	`,
+		pref.UserID, pref.ReadingSettings, pref.TranslationProvider,
+		pref.EnableAutoTranslation, pref.EnableTitleTranslation,
+		pref.MaxConcurrentTranslations, pref.TranslationTimeout,
+		pref.DefaultCategory, pref.EnableNotifications,
+		pref.ProxyModeEnabled, pref.ProxyServerURL, pref.ProxyToken,
+		time.Now().Unix(),
+	)
+	return err
+}
+
+// GetUserPreferences 获取用户偏好设置
+func (db *DB) GetUserPreferences(userID int64) (*UserPreference, error) {
+	pref := &UserPreference{}
+	err := db.QueryRow(`
+		SELECT user_id, reading_settings, translation_provider, 
+		       enable_auto_translation, enable_title_translation, 
+		       max_concurrent_translations, translation_timeout,
+		       default_category, enable_notifications,
+		       proxy_mode_enabled, proxy_server_url, proxy_token,
+		       created_at, updated_at
+		FROM user_preferences WHERE user_id = ?
+	`, userID).Scan(
+		&pref.UserID, &pref.ReadingSettings, &pref.TranslationProvider,
+		&pref.EnableAutoTranslation, &pref.EnableTitleTranslation,
+		&pref.MaxConcurrentTranslations, &pref.TranslationTimeout,
+		&pref.DefaultCategory, &pref.EnableNotifications,
+		&pref.ProxyModeEnabled, &pref.ProxyServerURL, &pref.ProxyToken,
+		&pref.CreatedAt, &pref.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return pref, nil
+}
+
 // Source 相关操作
 
 // CreateSource 创建订阅源

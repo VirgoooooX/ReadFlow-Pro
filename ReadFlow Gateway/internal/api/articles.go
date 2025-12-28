@@ -24,23 +24,24 @@ func NewArticleHandler(database *db.DB) *ArticleHandler {
 
 // ArticleListItem 列表项结构
 type ArticleListItem struct {
-	ID           int64  `json:"id"`
-	Title        string `json:"title"`
-	Summary      string `json:"summary"`
-	ImageURL     string `json:"imageUrl"`
-	ImageCaption string `json:"imageCaption"` // Added
-	ImageCredit  string `json:"imageCredit"`  // Added
-	Author       string `json:"author"`
-	PublishedAt  int64  `json:"publishedAt"`
-	SourceID     int64  `json:"sourceId"`
-	SourceName   string `json:"sourceName"`
-	WordCount    int    `json:"wordCount"`
-	ReadingTime  int    `json:"readingTime"`
-	IsRead       bool   `json:"isRead"`
-	IsFavorite   bool   `json:"isFavorite"`
-	ReadProgress int    `json:"readProgress"`
-	ReadAt       *int64 `json:"readAt,omitempty"`
-	UpdatedAt    int64  `json:"updatedAt"`
+	ID                int64  `json:"id"`
+	Title             string `json:"title"`
+	Summary           string `json:"summary"`
+	ImageURL          string `json:"imageUrl"`
+	ImageCaption      string `json:"imageCaption"`      // Added
+	ImageCredit       string `json:"imageCredit"`       // Added
+	ImagePrimaryColor string `json:"imagePrimaryColor"` // Added
+	Author            string `json:"author"`
+	PublishedAt       int64  `json:"publishedAt"`
+	SourceID          int64  `json:"sourceId"`
+	SourceName        string `json:"sourceName"`
+	WordCount         int    `json:"wordCount"`
+	ReadingTime       int    `json:"readingTime"`
+	IsRead            bool   `json:"isRead"`
+	IsFavorite        bool   `json:"isFavorite"`
+	ReadProgress      int    `json:"readProgress"`
+	ReadAt            *int64 `json:"readAt,omitempty"`
+	UpdatedAt         int64  `json:"updatedAt"`
 }
 
 // ArticleListResponse 列表响应
@@ -54,25 +55,26 @@ type ArticleListResponse struct {
 
 // ArticleDetailResponse 详情响应
 type ArticleDetailResponse struct {
-	Success      bool   `json:"success"`
-	ID           int64  `json:"id"`
-	Title        string `json:"title"`
-	Content      string `json:"content"`
-	Summary      string `json:"summary"`
-	ImageURL     string `json:"imageUrl"`
-	ImageCaption string `json:"imageCaption"` // Added
-	ImageCredit  string `json:"imageCredit"`  // Added
-	Author       string `json:"author"`
-	PublishedAt  int64  `json:"publishedAt"`
-	URL          string `json:"url"`
-	SourceID     int64  `json:"sourceId"`
-	SourceName   string `json:"sourceName"`
-	WordCount    int    `json:"wordCount"`
-	ReadingTime  int    `json:"readingTime"`
-	IsFavorite   bool   `json:"isFavorite"`
-	ReadProgress int    `json:"readProgress"`
-	ReadAt       *int64 `json:"readAt,omitempty"`
-	UpdatedAt    int64  `json:"updatedAt"`
+	Success           bool   `json:"success"`
+	ID                int64  `json:"id"`
+	Title             string `json:"title"`
+	Content           string `json:"content"`
+	Summary           string `json:"summary"`
+	ImageURL          string `json:"imageUrl"`
+	ImageCaption      string `json:"imageCaption"`      // Added
+	ImageCredit       string `json:"imageCredit"`       // Added
+	ImagePrimaryColor string `json:"imagePrimaryColor"` // Added
+	Author            string `json:"author"`
+	PublishedAt       int64  `json:"publishedAt"`
+	URL               string `json:"url"`
+	SourceID          int64  `json:"sourceId"`
+	SourceName        string `json:"sourceName"`
+	WordCount         int    `json:"wordCount"`
+	ReadingTime       int    `json:"readingTime"`
+	IsFavorite        bool   `json:"isFavorite"`
+	ReadProgress      int    `json:"readProgress"`
+	ReadAt            *int64 `json:"readAt,omitempty"`
+	UpdatedAt         int64  `json:"updatedAt"`
 }
 
 var (
@@ -187,21 +189,24 @@ func (h *ArticleHandler) ListArticles(c *gin.Context) {
 		}
 
 		items = append(items, ArticleListItem{
-			ID:           ua.ID,
-			Title:        ua.Title,
-			Summary:      summary,
-			ImageURL:     imageURL,
-			Author:       ua.Author,
-			PublishedAt:  publishedAt,
-			SourceID:     ua.SourceID,
-			SourceName:   ua.SourceTitle,
-			WordCount:    wordCount,
-			ReadingTime:  readingTime,
-			IsRead:       ua.Status != 0,
-			IsFavorite:   ua.IsFavorite,
-			ReadProgress: ua.ReadProgress,
-			ReadAt:       readAt,
-			UpdatedAt:    ua.UpdatedAt.Unix(),
+			ID:                ua.ID,
+			Title:             ua.Title,
+			Summary:           summary,
+			ImageURL:          imageURL,
+			ImageCaption:      ua.ImageCaption,
+			ImageCredit:       ua.ImageCredit,
+			ImagePrimaryColor: ua.ImagePrimaryColor,
+			Author:            ua.Author,
+			PublishedAt:       publishedAt,
+			SourceID:          ua.SourceID,
+			SourceName:        ua.SourceTitle,
+			WordCount:         wordCount,
+			ReadingTime:       readingTime,
+			IsRead:            ua.Status != 0,
+			IsFavorite:        ua.IsFavorite,
+			ReadProgress:      ua.ReadProgress,
+			ReadAt:            readAt,
+			UpdatedAt:         ua.UpdatedAt.Unix(),
 		})
 	}
 

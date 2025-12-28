@@ -250,13 +250,65 @@ export class AuthService {
    * 更新用户信息
    */
   public async updateProfile(updates: Partial<User>): Promise<AuthResponse> {
-      // TODO: Implement server side update
       if (!this.currentUser) return { success: false, message: 'Not logged in' };
       
       this.currentUser = { ...this.currentUser, ...updates };
       await AsyncStorage.setItem('current_user', JSON.stringify(this.currentUser));
       
       return { success: true, user: this.currentUser };
+  }
+
+  /**
+   * 同步用户配置到服务端
+   */
+  public async syncUserProfile(settings: {
+      readingSettings?: any;
+      translationProvider?: string;
+      enableAutoTranslation?: boolean;
+      enableTitleTranslation?: boolean;
+      maxConcurrentTranslations?: number;
+      translationTimeout?: number;
+      defaultCategory?: string;
+      enableNotifications?: boolean;
+      proxyModeEnabled?: boolean;
+      proxyServerUrl?: string;
+      proxyToken?: string;
+  }): Promise<void> {
+      if (!this.currentUser || !this.authToken) return;
+      
+      try {
+          const apiUrl = await this.getApiUrl();
+          // Convert camelCase to snake_case for server
+          const payload: any = {};
+          if (settings.readingSettings) payload.reading_settings = JSON.stringify(settings.readingSettings);
+          if (settings.translationProvider) payload.translation_provider = settings.translationProvider;
+          if (settings.enableAutoTranslation !== undefined) payload.enable_auto_translation = settings.enableAutoTranslation;
+          if (settings.enableTitleTranslation !== undefined) payload.enable_title_translation = settings.enableTitleTranslation;
+          if (settings.maxConcurrentTranslations) payload.max_concurrent_translations = settings.maxConcurrentTranslations;
+          if (settings.translationTimeout) payload.translation_timeout = settings.translationTimeout;
+          if (settings.defaultCategory) payload.default_category = settings.defaultCategory;
+          if (settings.enableNotifications !== undefined) payload.enable_notifications = settings.enableNotifications;
+          if (settings.proxyModeEnabled !== undefined) payload.proxy_mode_enabled = settings.proxyModeEnabled;
+          if (settings.proxyServerUrl) payload.proxy_server_url = settings.proxyServerUrl;
+          if (settings.proxyToken) payload.proxy_token = settings.proxyToken;
+
+          const response = await fetch(`${apiUrl}/api/user/profile`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${this.authToken}`
+              },
+              body: JSON.stringify(payload)
+          });
+          
+          if (!response.ok) {
+              logger.warn(`[AuthService] Failed to sync profile: ${response.status}`);
+          } else {
+              logger.info(`[AuthService] Profile synced successfully`);
+          }
+      } catch (error) {
+          logger.error(`[AuthService] Error syncing profile:`, error);
+      }
   }
 
   /**

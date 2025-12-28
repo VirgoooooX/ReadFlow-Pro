@@ -439,6 +439,7 @@ func (w *Worker) processItem(sourceID int64, feedItem *gofeed.Item, userIDs []in
 		contentHash,
 		imageCaption,
 		imageCredit,
+		imagePrimaryColor,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create item: %w", err)
